@@ -1,0 +1,22 @@
+{
+  "name": "jester-speed-delivery",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.1"
+  }
+}
