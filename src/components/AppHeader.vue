@@ -90,8 +90,10 @@ function switchToSignIn() {
       </button>
 
       <nav id="site-nav" class="nav" :class="{ 'nav--open': menuOpen }">
-        <a href="#delivery-area" class="nav__link" @click="menuOpen = false">Delivery</a>
+        <RouterLink to="/" class="nav__link" @click="menuOpen = false">Delivery</RouterLink>
         <a href="#categories" class="nav__link" @click="menuOpen = false">Services</a>
+        <RouterLink to="/vendor-directory" class="nav__link" @click="menuOpen = false">Shop Stores</RouterLink>
+        <RouterLink to="/vendor-registration" class="nav__link" @click="menuOpen = false">Sell on Jester</RouterLink>
         <a href="#together" class="nav__link" @click="menuOpen = false">Work with us</a>
         <a href="#partner" class="nav__link" @click="menuOpen = false">Partners</a>
       </nav>

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 
 const showOrderModal = ref(false)
+const selectedCategory = ref('')
 const orderDetails = ref({
   name: '',
   phone: '',
@@ -11,7 +12,8 @@ const orderDetails = ref({
   instructions: ''
 })
 
-function openOrderModal() {
+function openOrderModal(category: string) {
+  selectedCategory.value = category
   showOrderModal.value = true
 }
 
@@ -32,14 +34,15 @@ function resetForm() {
 }
 
 function submitOrder() {
-  if (!orderDetails.value.name || !orderDetails.value.phone || !orderDetails.value.location || !orderDetails.value.items) {
+  if (!orderDetails.value.name || !orderDetails.value.phone || !orderDetails.value.location) {
     alert('Please fill in all required fields')
     return
   }
 
   // Create WhatsApp message
-  const message = `*GENERAL ORDER - JESTER DELIVERY*
+  const message = `*FOOD ORDER - JESTER DELIVERY*
 
+*Category:* ${selectedCategory.value}
 *Name:* ${orderDetails.value.name}
 *Phone:* ${orderDetails.value.phone}
 *Location:* ${orderDetails.value.location}
@@ -53,7 +56,7 @@ function submitOrder() {
 *Thank you!*`
 
   // Open WhatsApp with order details
-  const whatsappUrl = `https://wa.me/254703735924?text=${encodeURIComponent(message)}`
+  const whatsappUrl = `https://wa.me/254712345678?text=${encodeURIComponent(message)}`
   window.open(whatsappUrl, '_blank')
   
   // Close modal and reset form
@@ -62,40 +65,36 @@ function submitOrder() {
 </script>
 
 <template>
-  <section class="delivery-showcase" aria-labelledby="delivery-heading">
-    <h2 id="delivery-heading" class="delivery-showcase__heading">Place Your Order</h2>
-    <p class="delivery-showcase__subtext">We deliver right to your doorstep! Fast, reliable service across Nairobi.</p>
-    
-    <div class="delivery-showcase__images">
-      <div class="delivery-showcase__image-wrapper">
-        <img 
-          src="/images/delivery1.jpeg" 
-          alt="Jester delivery in action" 
-          class="delivery-showcase__image"
-          loading="lazy"
-        />
+  <section class="food-ordering">
+    <div class="food-container">
+      <!-- Quick Order CTA -->
+      <div class="quick-order-cta">
+        <div class="cta-content">
+          <h3>Order Food & Meals</h3>
+          <p>Order eggs, samaki, lunch specials, fresh juices, and more from verified local restaurants</p>
+          <div class="cta-actions">
+            <button @click="openOrderModal('breakfast')" class="cta-btn secondary">
+              Order Breakfast
+            </button>
+            <button @click="openOrderModal('lunch')" class="cta-btn secondary">
+              Lunch Specials
+            </button>
+            <button @click="openOrderModal('fish')" class="cta-btn primary">
+              Fresh Samaki
+            </button>
+            <button @click="openOrderModal('juices')" class="cta-btn secondary">
+              Fresh Juices
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="delivery-showcase__image-wrapper">
-        <img 
-          src="/images/jester.jpeg" 
-          alt="Jester delivery service" 
-          class="delivery-showcase__image"
-          loading="lazy"
-        />
-      </div>
-    </div>
-    
-    <div class="delivery-showcase__cta">
-      <button @click="openOrderModal" class="delivery-showcase__btn primary">
-        Order Now
-      </button>
     </div>
 
     <!-- Order Modal -->
     <div v-if="showOrderModal" class="modal-overlay" @click="closeModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h2>Place Your Order</h2>
+          <h2>Order {{ selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1) }}</h2>
           <button class="modal-close" @click="closeModal">&times;</button>
         </div>
         <div class="modal-body">
@@ -140,19 +139,19 @@ function submitOrder() {
                 v-model="orderDetails.items" 
                 id="items" 
                 required
-                placeholder="e.g., Groceries from Tuskys, 2kg beef from butchery, Package documents, etc..."
+                placeholder="e.g., 2 eggs with toast, Fresh tilapia with ugali, Mango juice 500ml..."
                 rows="3"
               ></textarea>
             </div>
 
             <div class="form-row">
               <div class="form-group">
-                <label for="quantity">Quantity/Details</label>
+                <label for="quantity">Quantity/Portions</label>
                 <input 
                   v-model="orderDetails.quantity" 
                   type="text" 
                   id="quantity"
-                  placeholder="e.g., 1 package, 5kg, 2 boxes, etc."
+                  placeholder="e.g., 1 plate, 2 bottles, 4 pieces"
                 />
               </div>
               <div class="form-group">
@@ -161,7 +160,7 @@ function submitOrder() {
                   v-model="orderDetails.instructions" 
                   type="text" 
                   id="instructions"
-                  placeholder="e.g., Handle with care, Call when arriving, etc."
+                  placeholder="e.g., Extra spicy, No onions, Deliver ASAP"
                 />
               </div>
             </div>
@@ -169,16 +168,16 @@ function submitOrder() {
             <div class="order-summary">
               <h4>Order Summary</h4>
               <div class="summary-item">
+                <span>Category:</span>
+                <span>{{ selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1) }}</span>
+              </div>
+              <div class="summary-item">
                 <span>Delivery Fee:</span>
                 <span>Ksh 150-200 (based on location)</span>
               </div>
               <div class="summary-item">
                 <span>Payment:</span>
                 <span>Cash on Delivery</span>
-              </div>
-              <div class="summary-item">
-                <span>Service:</span>
-                <span>General Delivery</span>
               </div>
             </div>
 
@@ -196,113 +195,77 @@ function submitOrder() {
     </div>
   </section>
 </template>
+
 <style scoped>
-.delivery-showcase {
-  max-width: 1100px;
+.food-ordering {
+  padding: 4rem 1.25rem;
+  background: linear-gradient(180deg, var(--color-surface) 0%, #fff 50%, var(--color-surface) 100%);
+}
+
+.food-container {
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 3rem 1.25rem;
+}
+
+.quick-order-cta {
+  background: linear-gradient(135deg, var(--color-orange-soft), var(--color-mint-soft));
+  border-radius: var(--radius-lg);
+  padding: 3rem;
   text-align: center;
 }
 
-.delivery-showcase__heading {
+.cta-content h3 {
+  font-size: 1.8rem;
+  font-weight: 700;
   margin: 0 0 1rem;
-  font-size: clamp(2rem, 4vw, 2.5rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
   color: var(--color-ink);
 }
 
-.delivery-showcase__subtext {
-  margin: 0 0 2.5rem;
+.cta-content p {
   font-size: 1.1rem;
-  line-height: 1.6;
   color: var(--color-ink-muted);
+  margin: 0 0 2rem;
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
 }
 
-.delivery-showcase__images {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
-}
-
-@media (min-width: 768px) {
-  .delivery-showcase__images {
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-  }
-}
-
-.delivery-showcase__image-wrapper {
-  position: relative;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: var(--shadow-card);
-  aspect-ratio: 16/9;
-}
-
-.delivery-showcase__image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.delivery-showcase__image-wrapper:hover .delivery-showcase__image {
-  transform: scale(1.05);
-}
-
-.delivery-showcase__cta {
+.cta-actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 1rem;
-  align-items: center;
-}
-
-@media (min-width: 640px) {
-  .delivery-showcase__cta {
-    flex-direction: row;
-    justify-content: center;
-  }
-}
-
-.delivery-showcase__btn {
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  padding: 1rem 2rem;
+}
+
+.cta-btn {
+  padding: 1rem 1.5rem;
+  border: none;
   border-radius: var(--radius-md);
   font-weight: 700;
-  font-size: 1rem;
-  text-decoration: none;
+  cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 160px;
+  text-decoration: none;
+  display: inline-block;
 }
 
-.delivery-showcase__btn.primary {
+.cta-btn.primary {
   background: var(--color-orange);
-  color: #fff;
-  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.3);
+  color: white;
 }
 
-.delivery-showcase__btn.primary:hover {
+.cta-btn.primary:hover {
   background: var(--color-orange-hover);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
 }
 
-.delivery-showcase__btn.secondary {
-  background: var(--color-surface);
+.cta-btn.secondary {
+  background: white;
   color: var(--color-ink);
   border: 2px solid var(--color-border);
 }
 
-.delivery-showcase__btn.secondary:hover {
+.cta-btn.secondary:hover {
   border-color: var(--color-orange);
-  color: var(--color-orange);
   transform: translateY(-2px);
 }
 
@@ -492,6 +455,10 @@ function submitOrder() {
 }
 
 @media (max-width: 768px) {
+  .food-title {
+    font-size: 2rem;
+  }
+  
   .form-row {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -504,6 +471,16 @@ function submitOrder() {
   .modal-content {
     margin: 1rem;
     max-height: calc(100vh - 2rem);
+  }
+  
+  .cta-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .cta-btn {
+    width: 100%;
+    max-width: 300px;
   }
 }
 </style>

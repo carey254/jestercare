@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import HeroSearch from '../components/HeroSearch.vue'
 import CategoryGrid from '../components/CategoryGrid.vue'
+import FoodOrderingSection from '../components/FoodOrderingSection.vue'
 import DeliveryShowcase from '../components/DeliveryShowcase.vue'
 import TogetherSection from '../components/TogetherSection.vue'
 </script>
@@ -9,6 +10,7 @@ import TogetherSection from '../components/TogetherSection.vue'
   <div class="home">
     <HeroSearch />
     <CategoryGrid />
+    <FoodOrderingSection />
     <DeliveryShowcase />
     <TogetherSection />
   </div>

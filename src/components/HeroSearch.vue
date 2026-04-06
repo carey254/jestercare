@@ -196,7 +196,7 @@ function submit() {
       
     </div>
 
-    <h1 id="explore-heading" class="explore__title">Explore Nairobi</h1>
+    <h1 id="explore-heading" class="explore__title">What We Offer</h1>
   </section>
 </template>
 

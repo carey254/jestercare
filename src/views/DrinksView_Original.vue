@@ -42,7 +42,7 @@
             v-for="product in filteredProducts" 
             :key="product.id"
             class="product-card"
-            @click="openOrderModal(product)"
+            @click="openOrderWindow(product)"
           >
             <div class="product-image">
               <img :src="product.image" :alt="product.name" />
@@ -57,7 +57,10 @@
                 <span class="price">KSH {{ product.price }}</span>
                 <span class="unit">/ {{ product.unit }}</span>
               </div>
-              <button class="add-to-cart-btn" @click.stop="openOrderModal(product)">
+              <button 
+                class="add-to-cart-btn" 
+                @click.stop="openOrderWindow(product)"
+              >
                 Order Now
               </button>
             </div>
@@ -73,149 +76,18 @@
       </main>
     </div>
 
-    <!-- Order Modal -->
-    <div v-if="showOrderModal" class="modal-overlay" @click="closeOrderModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2>Order {{ selectedProduct?.name }}</h2>
-          <button class="close-btn" @click="closeOrderModal">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <!-- Product Image and Basic Info -->
-          <div class="product-summary">
-            <img :src="selectedProduct?.image" :alt="selectedProduct?.name" class="modal-product-image" />
-            <div class="product-details">
-              <h3>{{ selectedProduct?.name }}</h3>
-              <p>{{ selectedProduct?.description }}</p>
-              <div class="price-display">
-                <span class="base-price">KSH {{ selectedProduct?.price }} / {{ selectedProduct?.unit }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Quantity Selection -->
-          <div class="quantity-section">
-            <h4>Select Quantity</h4>
-            <div class="quantity-options">
-              <div class="quantity-type">
-                <label>
-                  <input 
-                    type="radio" 
-                    v-model="orderData.quantityType" 
-                    value="pieces" 
-                    @change="updateQuantity"
-                  />
-                  Order by {{ getUnitLabel() }}
-                </label>
-                <div v-if="orderData.quantityType === 'pieces'" class="quantity-input">
-                  <input 
-                    type="number" 
-                    v-model="orderData.quantityPieces" 
-                    min="1" 
-                    placeholder="Enter quantity"
-                  />
-                </div>
-              </div>
-              
-              <div class="quantity-type" v-if="selectedProduct?.unit === 'crate'">
-                <label>
-                  <input 
-                    type="radio" 
-                    v-model="orderData.quantityType" 
-                    value="crate" 
-                    @change="updateQuantity"
-                  />
-                  Order by Crate
-                </label>
-                <div v-if="orderData.quantityType === 'crate'" class="quantity-input">
-                  <input 
-                    type="number" 
-                    v-model="orderData.quantityCrates" 
-                    min="1" 
-                    placeholder="Enter number of crates"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Total Price -->
-          <div class="total-section">
-            <div class="total-row">
-              <span>Subtotal:</span>
-              <span>KSH {{ orderData.subtotal }}</span>
-            </div>
-            <div class="total-row">
-              <span>Delivery Fee:</span>
-              <span>KSH {{ orderData.deliveryFee }}</span>
-            </div>
-            <div class="total-row final">
-              <span>Total:</span>
-              <span>KSH {{ orderData.total }}</span>
-            </div>
-          </div>
-
-          <!-- Location Selection -->
-          <div class="location-section">
-            <h4>Delivery Location</h4>
-            <div class="location-options">
-              <label>
-                <input 
-                  type="radio" 
-                  v-model="orderData.locationType" 
-                  value="current" 
-                />
-                Use Current Location
-              </label>
-              <label>
-                <input 
-                  type="radio" 
-                  v-model="orderData.locationType" 
-                  value="custom" 
-                />
-                Enter Custom Location
-              </label>
-            </div>
-            <div v-if="orderData.locationType === 'custom'" class="location-input">
-              <textarea 
-                v-model="orderData.customLocation" 
-                placeholder="Enter your delivery address (landmark, building name, etc.)"
-                rows="3"
-              ></textarea>
-            </div>
-            <div v-if="orderData.locationType === 'current'" class="current-location">
-              <p>📍 We'll use your current location for delivery</p>
-            </div>
-          </div>
-
-          <!-- Comments Section -->
-          <div class="comments-section">
-            <h4>Special Instructions (Optional)</h4>
-            <textarea 
-              v-model="orderData.comments" 
-              placeholder="Any special requests or delivery instructions..."
-              rows="3"
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button class="continue-shopping-btn" @click="closeOrderModal">
-            Continue Shopping
-          </button>
-          <button class="confirm-order-btn" @click="confirmOrder">
-            Confirm Order
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Order Window -->
+    <OrderWindow 
+      :show="showOrderWindow" 
+      :product="selectedProduct" 
+      @close="closeOrderWindow" 
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { getWhatsAppUrl } from '../composables/useWhatsApp'
+import { ref, computed, onMounted } from 'vue'
+import OrderWindow from '../components/OrderWindow.vue'
 
 interface Product {
   id: string
@@ -236,39 +108,10 @@ interface Category {
   count: number
 }
 
-interface OrderData {
-  quantityType: 'kg' | 'pieces'
-  quantityKg: number
-  quantityPieces: number
-  subtotal: number
-  deliveryFee: number
-  total: number
-  locationType: 'current' | 'custom'
-  customLocation: string
-  comments: string
-  paymentMethod: string
-  paymentTiming: string
-  deliveryDistance: string
-  tipOption: string
-}
-
 const selectedCategory = ref('all')
 const sortBy = ref('name')
-const showOrderModal = ref(false)
+const showOrderWindow = ref(false)
 const selectedProduct = ref<Product | null>(null)
-const cartItems = ref<Product[]>([])
-
-const orderData = ref<OrderData>({
-  quantityType: 'pieces',
-  quantityPieces: 1,
-  quantityCrates: 1,
-  subtotal: 0,
-  deliveryFee: 150,
-  total: 0,
-  locationType: 'current',
-  customLocation: '',
-  comments: ''
-})
 
 const categories: Category[] = [
   { id: 'all', name: 'All Drinks', icon: '🍻', count: 10 },
@@ -284,7 +127,7 @@ const products: Product[] = [
     id: '1',
     name: 'Tusker Beer',
     description: 'Kenya\'s favorite beer - smooth and refreshing',
-    price: 180,
+    price: 300,
     unit: 'bottle',
     category: 'beer',
     image: '/images/categories/drinks/tusker beer.jfif',
@@ -295,7 +138,7 @@ const products: Product[] = [
     id: '2',
     name: 'Heineken Beer',
     description: 'Premium international lager',
-    price: 220,
+    price: 300,
     unit: 'bottle',
     category: 'beer',
     image: '/images/categories/drinks/heineken beer.jfif',
@@ -305,7 +148,7 @@ const products: Product[] = [
     id: '3',
     name: 'Whitecap Beer',
     description: 'Classic Kenyan beer with rich taste',
-    price: 170,
+    price: 300,
     unit: 'bottle',
     category: 'beer',
     image: '/images/categories/drinks/whitecap beer.jfif',
@@ -317,7 +160,7 @@ const products: Product[] = [
     id: '4',
     name: 'Captain Morgan Rum',
     description: 'Premium spiced Caribbean rum',
-    price: 2800,
+    price: 1800,
     unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/captain morgan.jfif',
@@ -327,7 +170,7 @@ const products: Product[] = [
     id: '5',
     name: 'Smirnoff Vodka',
     description: 'Smooth premium vodka',
-    price: 2200,
+    price: 1500,
     unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/smirnoff.jfif'
@@ -346,7 +189,7 @@ const products: Product[] = [
     id: '7',
     name: 'Chrome Gin',
     description: 'Premium London dry gin',
-    price: 1800,
+    price: 1200,
     unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/chrom gin.jfif'
@@ -415,70 +258,14 @@ const getCurrentCategoryName = () => {
   return category ? category.name : 'All Drinks'
 }
 
-const getUnitLabel = () => {
-  if (!selectedProduct.value) return 'pieces'
-  
-  switch (selectedProduct.value.unit) {
-    case 'bottle':
-      return 'Bottles'
-    case 'pack':
-      return 'Packs'
-    default:
-      return 'Pieces'
-  }
-}
-
-const openOrderModal = (product: Product) => {
+const openOrderWindow = (product: Product) => {
   selectedProduct.value = product
-  showOrderModal.value = true
-  orderData.value = {
-    quantityType: 'pieces',
-    quantityPieces: 1,
-    quantityCrates: 1,
-    subtotal: product.price,
-    deliveryFee: 150,
-    total: product.price + 150,
-    locationType: 'current',
-    customLocation: '',
-    comments: ''
-  }
+  showOrderWindow.value = true
 }
 
-const closeOrderModal = () => {
-  showOrderModal.value = false
+const closeOrderWindow = () => {
+  showOrderWindow.value = false
   selectedProduct.value = null
-}
-
-const updateQuantity = () => {
-  if (!selectedProduct.value) return
-  
-  let subtotal = 0
-  
-  if (orderData.value.quantityType === 'crate' && selectedProduct.value.cratePrice) {
-    subtotal = selectedProduct.value.cratePrice * orderData.value.quantityCrates
-  } else {
-    subtotal = selectedProduct.value.price * orderData.value.quantityPieces
-  }
-  
-  orderData.value.subtotal = subtotal
-  orderData.value.total = subtotal + orderData.value.deliveryFee
-}
-
-const confirmOrder = () => {
-  if (!selectedProduct.value) return
-  
-  const order = {
-    product: selectedProduct.value,
-    orderData: { ...orderData.value },
-    timestamp: new Date()
-  }
-  
-  cartItems.value.push(order as any)
-  console.log('Order confirmed:', order)
-  
-  alert(`Order confirmed! Total: KSH ${orderData.value.total}`)
-  
-  closeOrderModal()
 }
 
 onMounted(() => {
@@ -490,15 +277,6 @@ onMounted(() => {
     }
   })
 })
-
-// Watch for quantity changes to update totals
-watch(
-  () => [orderData.value.quantityPieces, orderData.value.quantityCrates, orderData.value.quantityType],
-  () => {
-    updateQuantity()
-  },
-  { deep: true }
-)
 </script>
 
 <style scoped>
@@ -716,246 +494,6 @@ watch(
 }
 
 .add-to-cart-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
-}
-
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 16px;
-  max-width: 600px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.modal-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 2rem;
-  cursor: pointer;
-  color: #6c757d;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.close-btn:hover {
-  color: #ff6b35;
-}
-
-.modal-body {
-  padding: 1.5rem;
-}
-
-.product-summary {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.modal-product-image {
-  width: 100px;
-  height: 100px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.product-details h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.product-details p {
-  margin: 0 0 0.5rem 0;
-  color: #6c757d;
-  font-size: 0.875rem;
-}
-
-.base-price {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #ff6b35;
-}
-
-.quantity-section,
-.location-section,
-.comments-section {
-  margin-bottom: 1.5rem;
-}
-
-.quantity-section h4,
-.location-section h4,
-.comments-section h4 {
-  margin: 0 0 1rem 0;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.quantity-options {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.quantity-type label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.quantity-input input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  margin-top: 0.5rem;
-}
-
-.location-options {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.location-options label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.location-input textarea,
-.comments-section textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  resize: vertical;
-  font-family: inherit;
-}
-
-.current-location {
-  background: #e8f4fd;
-  padding: 1rem;
-  border-radius: 8px;
-  border-left: 4px solid #ff6b35;
-}
-
-.current-location p {
-  margin: 0;
-  color: #2c3e50;
-  font-weight: 500;
-}
-
-.total-section {
-  background: #f8f9fa;
-  padding: 1rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-}
-
-.total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.total-row:last-child {
-  margin-bottom: 0;
-}
-
-.total-row.final {
-  border-top: 2px solid #ff6b35;
-  padding-top: 0.5rem;
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: #ff6b35;
-}
-
-.modal-footer {
-  display: flex;
-  gap: 1rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e9ecef;
-}
-
-.continue-shopping-btn {
-  flex: 1;
-  padding: 0.75rem 1.5rem;
-  background: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.continue-shopping-btn:hover {
-  background: #5a6268;
-  transform: translateY(-1px);
-}
-
-.confirm-order-btn {
-  flex: 2;
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.confirm-order-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
 }

@@ -16,6 +16,14 @@ function goToRiderApplication() {
   router.push('/rider-application')
 }
 
+function goToVendorDirectory() {
+  router.push('/vendor-directory')
+}
+
+function goToVendorRegistration() {
+  router.push('/vendor-registration')
+}
+
 function openPrivacyPolicy() {
   showPrivacyPolicy.value = true
 }
@@ -65,6 +73,7 @@ function closeTermsOfUse() {
             <li><a href="#categories">Groceries &amp; supermarket</a></li>
             <li><a href="#categories">Alcohol &amp; pharmacy</a></li>
             <li><a href="#categories">Cleaning &amp; packages</a></li>
+            <li><a href="#" @click.prevent="goToVendorDirectory">Shop local stores</a></li>
           </ul>
         </div>
         <div id="careers">
@@ -73,6 +82,7 @@ function closeTermsOfUse() {
             <li><a href="#together">How we work</a></li>
             <li><a href="mailto:careers@jesterspeed.co.ke">Careers</a></li>
             <li><a href="#">Help centre</a></li>
+            <li><a href="#" @click.prevent="goToVendorRegistration">Sell on Jester</a></li>
           </ul>
         </div>
         <div>
