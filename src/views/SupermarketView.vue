@@ -17,7 +17,6 @@
             >
               <span class="category-icon">{{ category.icon }}</span>
               <span class="category-name">{{ category.name }}</span>
-              <span class="category-count">({{ category.count }})</span>
             </li>
           </ul>
         </nav>
@@ -30,40 +29,42 @@
           <div class="filters">
             <select v-model="sortBy" class="sort-select">
               <option value="name">Sort by Name</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
             </select>
           </div>
         </div>
 
-        <!-- Products Grid -->
-        <div class="products-grid">
+        
+        <!-- Category Sections -->
+        <div class="category-sections">
           <div 
-            v-for="product in filteredProducts" 
-            :key="product.id"
-            class="product-card"
-            @click="openOrderModal(product)"
+            v-for="category in getCategorySections()" 
+            :key="category.id"
+            class="category-section"
+            v-if="selectedCategory === 'all' || selectedCategory === category.id"
           >
-            <div class="product-image">
-              <img :src="product.image" :alt="product.name" />
-              <div class="product-badge" v-if="product.badge">
-                {{ product.badge }}
-              </div>
-            </div>
-            <div class="product-info">
-              <h3 class="product-name">{{ product.name }}</h3>
-              <p class="product-description">{{ product.description }}</p>
-              <div class="product-price">
-                <span class="price">KSH {{ product.price }}</span>
-                <span class="unit">/ {{ product.unit }}</span>
-              </div>
-              <button 
-                class="add-to-cart-btn" 
-                @click.stop="openOrderWindow(product)"
+            <div class="section-images">
+              <div 
+                v-for="product in category.products" 
+                :key="product.id"
+                class="section-product-image"
+                @click="openOrderWindow(product)"
               >
-                Order Now
-              </button>
+                <img :src="product.image" :alt="product.name" />
+                <div class="image-overlay">
+                  <span class="product-name-overlay">{{ product.name }}</span>
+                </div>
+              </div>
             </div>
+          </div>
+          
+          <!-- Single Order Button -->
+          <div class="order-section">
+            <button 
+              class="main-order-btn"
+              @click="openMainOrder"
+            >
+              Order
+            </button>
           </div>
         </div>
 
@@ -93,12 +94,9 @@ interface Product {
   id: string
   name: string
   description: string
-  price: number
-  unit: string
   category: string
   image: string
   badge?: string
-  pricePerPiece?: number
 }
 
 interface Category {
@@ -140,8 +138,6 @@ const products: Product[] = [
     id: '1',
     name: 'Salit Cooking Oil',
     description: 'Quality cooking oil for all your cooking needs',
-    price: 450,
-    unit: 'litre',
     category: 'food-staples',
     image: '/images/categories/supermarket/salit cooking oil.png',
     badge: 'Essential'
@@ -150,8 +146,6 @@ const products: Product[] = [
     id: '2',
     name: 'Sugar',
     description: 'Refined white sugar for household use',
-    price: 180,
-    unit: 'kg',
     category: 'food-staples',
     image: '/images/categories/supermarket/sugar.jfif'
   },
@@ -159,8 +153,6 @@ const products: Product[] = [
     id: '3',
     name: 'Rice',
     description: 'Premium long grain rice',
-    price: 220,
-    unit: 'kg',
     category: 'food-staples',
     image: '/images/categories/supermarket/rice.jfif',
     badge: 'Popular'
@@ -171,8 +163,6 @@ const products: Product[] = [
     id: '4',
     name: 'Colgate Toothpaste',
     description: 'Fresh breath and cavity protection',
-    price: 150,
-    unit: 'piece',
     category: 'personal-care',
     image: '/images/categories/supermarket/colgate.png'
   },
@@ -180,8 +170,6 @@ const products: Product[] = [
     id: '5',
     name: 'Bath Soap',
     description: 'Gentle cleansing bath soap',
-    price: 85,
-    unit: 'piece',
     category: 'personal-care',
     image: '/images/categories/supermarket/bath soap.jfif'
   },
@@ -189,8 +177,6 @@ const products: Product[] = [
     id: '6',
     name: 'Tissue Paper',
     description: 'Soft facial tissues',
-    price: 65,
-    unit: 'pack',
     category: 'personal-care',
     image: '/images/categories/supermarket/tissue.jfif'
   },
@@ -198,8 +184,6 @@ const products: Product[] = [
     id: '7',
     name: 'Washing Soap',
     description: 'Multipurpose washing soap',
-    price: 95,
-    unit: 'piece',
     category: 'personal-care',
     image: '/images/categories/supermarket/soap.jfif'
   },
@@ -209,8 +193,6 @@ const products: Product[] = [
     id: '8',
     name: 'Pampers Diapers',
     description: 'Comfortable baby diapers',
-    price: 850,
-    unit: 'pack',
     category: 'baby-care',
     image: '/images/categories/supermarket/pampers.jfif',
     badge: 'Best Seller'
@@ -221,8 +203,6 @@ const products: Product[] = [
     id: '9',
     name: 'Shopping Essentials',
     description: 'Complete household shopping pack',
-    price: 1200,
-    unit: 'bundle',
     category: 'household',
     image: '/images/categories/supermarket/SHOPPIN.png',
     badge: 'Value Pack'
@@ -231,8 +211,6 @@ const products: Product[] = [
     id: '10',
     name: 'Home Essentials',
     description: 'Basic household necessities',
-    price: 650,
-    unit: 'pack',
     category: 'household',
     image: '/images/categories/supermarket/shop.jpg'
   },
@@ -240,8 +218,6 @@ const products: Product[] = [
     id: '11',
     name: 'Daily Shopping',
     description: 'Everyday shopping items',
-    price: 380,
-    unit: 'pack',
     category: 'household',
     image: '/images/categories/supermarket/shopping.jpg'
   },
@@ -251,8 +227,6 @@ const products: Product[] = [
     id: '12',
     name: 'Security Padlock',
     description: 'Heavy duty security padlock',
-    price: 320,
-    unit: 'piece',
     category: 'security',
     image: '/images/categories/supermarket/padlock.png'
   },
@@ -262,13 +236,46 @@ const products: Product[] = [
     id: '13',
     name: 'Shopping Bundle',
     description: 'Complete shopping solution',
-    price: 980,
-    unit: 'bundle',
     category: 'household',
     image: '/images/categories/supermarket/shopping.webp',
     badge: 'New'
   }
 ]
+
+const getCategorySections = () => {
+  const categoryMap = new Map()
+  
+  // Initialize categories
+  categories.forEach(cat => {
+    if (cat.id !== 'all') {
+      categoryMap.set(cat.id, {
+        id: cat.id,
+        name: cat.name,
+        products: []
+      })
+    }
+  })
+  
+  // Group products by category
+  products.forEach(product => {
+    const categoryProducts = categoryMap.get(product.category)
+    if (categoryProducts) {
+      categoryProducts.products.push(product)
+    }
+  })
+  
+  // Sort products within each category
+  categoryMap.forEach(category => {
+    category.products.sort((a, b) => {
+      if (sortBy.value === 'name') {
+        return a.name.localeCompare(b.name)
+      }
+      return 0
+    })
+  })
+  
+  return Array.from(categoryMap.values())
+}
 
 const filteredProducts = computed(() => {
   let filtered = selectedCategory.value === 'all' 
@@ -279,10 +286,6 @@ const filteredProducts = computed(() => {
     switch (sortBy.value) {
       case 'name':
         return a.name.localeCompare(b.name)
-      case 'price-low':
-        return a.price - b.price
-      case 'price-high':
-        return b.price - a.price
       default:
         return 0
     }
@@ -298,6 +301,18 @@ const selectCategory = (categoryId: string) => {
 const getCurrentCategoryName = () => {
   const category = categories.find(c => c.id === selectedCategory.value)
   return category ? category.name : 'All Products'
+}
+
+const openMainOrder = () => {
+  // Create a general order product
+  const mainOrderProduct = {
+    id: 'main-order',
+    name: 'Supermarket Order',
+    description: 'Place your order for supermarket items',
+    category: 'all',
+    image: ''
+  }
+  openOrderWindow(mainOrderProduct)
 }
 
 const openOrderWindow = (product: Product) => {
@@ -435,6 +450,112 @@ onMounted(() => {
   background: white;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.price-disclaimer {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.price-disclaimer p {
+  margin: 0;
+  color: #856404;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Category Sections */
+.category-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.category-section {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.order-section {
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.main-order-btn {
+  padding: 1rem 3rem;
+  background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.main-order-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+}
+
+.section-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.section-product-image {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  aspect-ratio: 1;
+}
+
+.section-product-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.section-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  padding: 1rem 0.5rem 0.5rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.section-product-image:hover .image-overlay {
+  opacity: 1;
+}
+
+.product-name-overlay {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  display: block;
 }
 
 /* Products Grid */
@@ -838,12 +959,26 @@ onMounted(() => {
     border-left: none;
     border-bottom-color: #ff6b35;
   }
+  
+  .section-images {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
-  .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
+  .section-images {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  
+  .order-section {
+    padding: 1.5rem;
+  }
+  
+  .main-order-btn {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
   }
   
   .content-header {

@@ -1,63 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import OrderWindow from './OrderWindow.vue'
 
-const showOrderModal = ref(false)
-const orderDetails = ref({
-  name: '',
-  phone: '',
-  location: '',
-  items: '',
-  quantity: '',
-  instructions: ''
-})
+const showOrderWindow = ref(false)
+const selectedCategory = ref('General Delivery')
 
 function openOrderModal() {
-  showOrderModal.value = true
+  console.log('DeliveryShowcase Order Now clicked!')
+  showOrderWindow.value = true
 }
 
-function closeModal() {
-  showOrderModal.value = false
-  resetForm()
-}
-
-function resetForm() {
-  orderDetails.value = {
-    name: '',
-    phone: '',
-    location: '',
-    items: '',
-    quantity: '',
-    instructions: ''
-  }
-}
-
-function submitOrder() {
-  if (!orderDetails.value.name || !orderDetails.value.phone || !orderDetails.value.location || !orderDetails.value.items) {
-    alert('Please fill in all required fields')
-    return
-  }
-
-  // Create WhatsApp message
-  const message = `*GENERAL ORDER - JESTER DELIVERY*
-
-*Name:* ${orderDetails.value.name}
-*Phone:* ${orderDetails.value.phone}
-*Location:* ${orderDetails.value.location}
-*Items:* ${orderDetails.value.items}
-*Quantity:* ${orderDetails.value.quantity}
-*Special Instructions:* ${orderDetails.value.instructions || 'None'}
-
-*Please process my order for delivery.*
-*Delivery Fee:* Ksh 150-${orderDetails.value.location.includes('Westlands') || orderDetails.value.location.includes('Kilimani') ? '200' : '150'}*
-
-*Thank you!*`
-
-  // Open WhatsApp with order details
-  const whatsappUrl = `https://wa.me/254703735924?text=${encodeURIComponent(message)}`
-  window.open(whatsappUrl, '_blank')
-  
-  // Close modal and reset form
-  closeModal()
+function closeOrderWindow() {
+  showOrderWindow.value = false
 }
 </script>
 
@@ -91,109 +45,12 @@ function submitOrder() {
       </button>
     </div>
 
-    <!-- Order Modal -->
-    <div v-if="showOrderModal" class="modal-overlay" @click="closeModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h2>Place Your Order</h2>
-          <button class="modal-close" @click="closeModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="submitOrder" class="order-form">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="name">Full Name *</label>
-                <input 
-                  v-model="orderDetails.name" 
-                  type="text" 
-                  id="name" 
-                  required
-                  placeholder="Enter your full name"
-                />
-              </div>
-              <div class="form-group">
-                <label for="phone">Phone Number *</label>
-                <input 
-                  v-model="orderDetails.phone" 
-                  type="tel" 
-                  id="phone" 
-                  required
-                  placeholder="07XX XXX XXX"
-                />
-              </div>
-            </div>
-            
-            <div class="form-group">
-              <label for="location">Delivery Location *</label>
-              <input 
-                v-model="orderDetails.location" 
-                type="text" 
-                id="location" 
-                required
-                placeholder="e.g., Westlands, Kilimani, CBD, etc."
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="items">What would you like to order? *</label>
-              <textarea 
-                v-model="orderDetails.items" 
-                id="items" 
-                required
-                placeholder="e.g., Groceries from Tuskys, 2kg beef from butchery, Package documents, etc..."
-                rows="3"
-              ></textarea>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="quantity">Quantity/Details</label>
-                <input 
-                  v-model="orderDetails.quantity" 
-                  type="text" 
-                  id="quantity"
-                  placeholder="e.g., 1 package, 5kg, 2 boxes, etc."
-                />
-              </div>
-              <div class="form-group">
-                <label for="instructions">Special Instructions</label>
-                <input 
-                  v-model="orderDetails.instructions" 
-                  type="text" 
-                  id="instructions"
-                  placeholder="e.g., Handle with care, Call when arriving, etc."
-                />
-              </div>
-            </div>
-
-            <div class="order-summary">
-              <h4>Order Summary</h4>
-              <div class="summary-item">
-                <span>Delivery Fee:</span>
-                <span>Ksh 150-200 (based on location)</span>
-              </div>
-              <div class="summary-item">
-                <span>Payment:</span>
-                <span>Cash on Delivery</span>
-              </div>
-              <div class="summary-item">
-                <span>Service:</span>
-                <span>General Delivery</span>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button type="button" @click="closeModal" class="btn-cancel">
-                Cancel
-              </button>
-              <button type="submit" class="btn-submit">
-                Send Order via WhatsApp
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+    <!-- Order Window -->
+    <OrderWindow 
+      :show="showOrderWindow" 
+      :category="selectedCategory"
+      @close="closeOrderWindow" 
+    />
   </section>
 </template>
 <style scoped>
@@ -292,6 +149,14 @@ function submitOrder() {
   background: var(--color-orange-hover);
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+/* Debug styles */
+.delivery-showcase__btn {
+  border: 3px solid red !important;
+  z-index: 999 !important;
+  pointer-events: auto !important;
+  position: relative !important;
 }
 
 .delivery-showcase__btn.secondary {

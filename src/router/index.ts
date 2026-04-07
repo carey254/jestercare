@@ -40,46 +40,6 @@ const router = createRouter({
       name: 'category',
       component: () => import('../views/CategoryPlaceholderView.vue'),
     },
-    {
-      path: '/partner-application',
-      name: 'partner-application',
-      component: () => import('../views/PartnerApplicationView.vue'),
-    },
-    {
-      path: '/rider-application',
-      name: 'rider-application',
-      component: () => import('../views/RiderApplicationView.vue'),
-    },
-    {
-      path: '/vendor-registration',
-      name: 'vendor-registration',
-      component: () => import('../views/VendorRegistrationView.vue'),
-    },
-    {
-      path: '/vendor-dashboard',
-      name: 'vendor-dashboard',
-      component: () => import('../views/VendorDashboardView.vue'),
-    },
-    {
-      path: '/vendor-directory',
-      name: 'vendor-directory',
-      component: () => import('../views/VendorDirectoryView.vue'),
-    },
-    {
-      path: '/vendor-store/:id',
-      name: 'vendor-store',
-      component: () => import('../views/VendorStoreView.vue'),
-    },
-    {
-      path: '/vendor-checkout/:id',
-      name: 'vendor-checkout',
-      component: () => import('../views/VendorCheckoutView.vue'),
-    },
-    {
-      path: '/auth',
-      name: 'auth',
-      component: () => import('../views/AuthView.vue'),
-    },
   ],
   scrollBehavior() {
     return { top: 0 }

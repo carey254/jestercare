@@ -129,7 +129,11 @@ function goBack() {
               <span>Ksh {{ orderData.total.toLocaleString() }}</span>
             </div>
             <div class="total-row">
-              <span>Delivery Fee:</span>
+              <span>VAT:</span>
+              <span>Ksh {{ Math.round(orderData.total * 0.13).toLocaleString() }}</span>
+            </div>
+            <div class="total-row">
+              <span>Service Charge:</span>
               <span>Ksh {{ orderData.deliveryFee }}</span>
             </div>
             <div class="total-row final">
@@ -235,7 +239,11 @@ function goBack() {
                 <span>Ksh {{ orderData.total.toLocaleString() }}</span>
               </div>
               <div class="summary-row">
-                <span>Delivery Fee:</span>
+                <span>VAT:</span>
+                <span>Ksh {{ Math.round(orderData.total * 0.13).toLocaleString() }}</span>
+              </div>
+              <div class="summary-row">
+                <span>Service Charge:</span>
                 <span>Ksh {{ orderData.deliveryFee }}</span>
               </div>
               <div class="summary-row total">

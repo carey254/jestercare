@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { user } from './useAuth'
+import { calculateDelivery, calculateServiceFee, calculateOrderTotal, getDeliveryTimeMessage } from './useDelivery'
 
 interface CartItem {
   id: string
@@ -68,10 +69,13 @@ const clearCart = () => {
   cartItems.value = []
 }
 
-const generateWhatsAppMessage = () => {
+const generateWhatsAppMessage = async (deliveryLocation?: string, locationLink?: string) => {
   if (cartItems.value.length === 0) return ''
   
   let message = '🛒 *ORDER DETAILS*\n\n'
+  
+  // Add price disclaimer
+  message += 'Prices are subject to change due to market conditions. Final receipts will be provided once your order is processed.\n\n'
   
   // Add customer information if user is logged in
   if (user.value) {
@@ -85,6 +89,25 @@ const generateWhatsAppMessage = () => {
     }
     if (user.value.address) {
       message += `Address: ${user.value.address}\n`
+      
+      // Calculate delivery if address is available
+      try {
+        const delivery = await calculateDelivery(user.value.address)
+        message += `\n${getDeliveryTimeMessage(delivery.distance)}\n`
+        message += `Distance: ${delivery.distance.toFixed(1)} km\n`
+      } catch (error) {
+        console.error('Delivery calculation failed:', error)
+      }
+    }
+    message += '\n'
+  }
+  
+  // Add delivery location if provided
+  if (deliveryLocation) {
+    message += '*Delivery Location:*\n'
+    message += `${deliveryLocation}\n`
+    if (locationLink) {
+      message += `Map: ${locationLink}\n`
     }
     message += '\n'
   }
@@ -99,14 +122,47 @@ const generateWhatsAppMessage = () => {
   })
   
   const subtotal = cartTotal.value
-  const deliveryFee = subtotal > 0 ? 200 : 0
-  const total = subtotal + deliveryFee
+  const serviceFee = calculateServiceFee(subtotal)
+  
+  // Default delivery charge (will be updated if address is available)
+  let deliveryCharge = 40
+  let deliveryTimeMessage = ''
+  
+  if (user.value?.address) {
+    try {
+      const delivery = await calculateDelivery(user.value.address)
+      deliveryCharge = delivery.deliveryCharge
+      deliveryTimeMessage = getDeliveryTimeMessage(delivery.distance)
+    } catch (error) {
+      console.error('Delivery calculation failed:', error)
+      deliveryCharge = 40 // fallback
+    }
+  } else if (deliveryLocation) {
+    try {
+      const delivery = await calculateDelivery(deliveryLocation)
+      deliveryCharge = delivery.deliveryCharge
+      deliveryTimeMessage = getDeliveryTimeMessage(delivery.distance)
+    } catch (error) {
+      console.error('Delivery calculation failed:', error)
+      deliveryCharge = 40 // fallback
+    }
+  }
+  
+  const total = calculateOrderTotal(subtotal, deliveryCharge, serviceFee)
   
   message += '*Order Summary:*\n'
   message += `Subtotal: KSH ${subtotal}\n`
-  message += `Delivery Fee: KSH ${deliveryFee}\n`
+  message += `VAT: KSH ${serviceFee}\n`
+  message += `Service Charge: KSH ${deliveryCharge}\n`
   message += `Total: KSH ${total}\n\n`
+  
+  if (deliveryTimeMessage) {
+    message += `${deliveryTimeMessage}\n\n`
+  }
+  
   message += '*Payment Method:* WhatsApp Pay\n\n'
+  message += '*Service Information:*\n'
+  message += 'Delivery service includes professional rider handling\n\n'
   
   if (!user.value) {
     message += '📍 *Delivery Information Needed*\n'

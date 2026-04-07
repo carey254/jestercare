@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { user, isAuthenticated } from '../composables/useAuth'
+import { calculateServiceFee, calculateOrderTotal, calculateDelivery, getDeliveryTimeMessage, calculateOrderBreakdown, geocodeAddress, getCurrentLocationWithGeocoding } from '../composables/useDelivery'
 
 interface OrderItem {
   id: string
@@ -13,13 +14,7 @@ interface OrderItem {
 
 const props = defineProps<{
   show: boolean
-  product?: {
-    id: string
-    name: string
-    price: number
-    unit: string
-    image?: string
-  }
+  category?: string
 }>()
 
 const emit = defineEmits<{
@@ -29,30 +24,27 @@ const emit = defineEmits<{
 const orderItems = ref<OrderItem[]>([])
 const quantity = ref(1)
 const notes = ref('')
+const deliveryLocation = ref('')
+const useCurrentLocation = ref(false)
+const locationLoading = ref(false)
+const locationError = ref('')
+const locationData = ref(null)
+const locationLink = ref('')
 
-// Add product to order when component opens
-watch(() => props.show, (newShow) => {
-  if (newShow && props.product) {
-    const existingItem = orderItems.value.find(item => item.id === props.product!.id)
-    if (!existingItem) {
-      orderItems.value.push({
-        id: props.product!.id,
-        name: props.product!.name,
-        price: props.product!.price,
-        unit: props.product!.unit,
-        quantity: quantity.value,
-        image: props.product!.image
-      })
-    }
-  }
-})
+// For custom item entry
+const newItemName = ref('')
+const newItemPrice = ref<number | null>(null)
+const newItemUnit = ref('')
 
-const subtotal = computed(() => {
-  return orderItems.value.reduce((total, item) => total + (item.price * item.quantity), 0)
-})
+// OrderWindow opens with empty cart - user adds items manually
 
-const deliveryFee = computed(() => subtotal.value > 0 ? 200 : 0)
-const total = computed(() => subtotal.value + deliveryFee.value)
+const deliveryCharge = ref(40)
+const riderFee = ref(100) // Fixed rider fee (hidden from user)
+const orderBreakdown = computed(() => calculateOrderBreakdown(orderItems.value.reduce((total, item) => total + (item.price * item.quantity), 0), deliveryCharge.value))
+const subtotal = computed(() => orderBreakdown.value.subtotal)
+const serviceFee = computed(() => orderBreakdown.value.vat)
+const total = computed(() => orderBreakdown.value.total + riderFee.value)
+const deliveryTimeMessage = ref('')
 
 const updateQuantity = (itemId: string, newQuantity: number) => {
   const item = orderItems.value.find(item => item.id === itemId)
@@ -68,18 +60,111 @@ const removeItem = (itemId: string) => {
   }
 }
 
-const placeOrder = () => {
-  if (orderItems.value.length === 0) return
-  
-  // Check if user is authenticated
-  if (!isAuthenticated.value) {
-    alert('Please sign in to place an order')
-    emit('close')
+const addCustomItem = () => {
+  if (!newItemName.value.trim()) {
+    alert('Please enter an item name')
     return
+  }
+  
+  if (!newItemPrice.value || newItemPrice.value <= 0) {
+    alert('Please enter a valid price')
+    return
+  }
+  
+  const newItem: OrderItem = {
+    id: Date.now().toString(),
+    name: newItemName.value.trim(),
+    price: newItemPrice.value,
+    unit: newItemUnit.value.trim() || 'pcs',
+    quantity: 1
+  }
+  
+  orderItems.value.push(newItem)
+  
+  // Clear inputs
+  newItemName.value = ''
+  newItemPrice.value = null
+  newItemUnit.value = ''
+}
+
+const processLocation = async (address: string) => {
+  if (!address.trim()) {
+    locationData.value = null
+    locationLink.value = ''
+    return
+  }
+  
+  try {
+    locationLoading.value = true
+    locationError.value = ''
+    
+    const geocoded = await geocodeAddress(address)
+    locationData.value = geocoded
+    locationLink.value = geocoded.googleMapsUrl
+    deliveryLocation.value = geocoded.formattedAddress
+  } catch (error) {
+    console.error('Location processing failed:', error)
+    locationError.value = 'Unable to process location. Please try a different address.'
+    locationData.value = null
+    locationLink.value = ''
+  } finally {
+    locationLoading.value = false
+  }
+}
+
+const getCurrentLocation = async () => {
+  try {
+    locationLoading.value = true
+    locationError.value = ''
+    useCurrentLocation.value = true
+    
+    const location = await getCurrentLocationWithGeocoding()
+    locationData.value = location
+    locationLink.value = location.googleMapsUrl
+    deliveryLocation.value = location.formattedAddress
+  } catch (error) {
+    console.error('Current location failed:', error)
+    locationError.value = error.message || 'Unable to get your location. Please enter address manually.'
+  } finally {
+    locationLoading.value = false
+  }
+}
+
+const viewLocationOnMap = () => {
+  if (locationLink.value) {
+    window.open(locationLink.value, '_blank')
+  }
+}
+
+const canPlaceOrder = computed(() => {
+  return orderItems.value.length > 0 && deliveryLocation.value.trim().length > 0
+})
+
+const placeOrder = async () => {
+  if (orderItems.value.length === 0) {
+    alert('Please add at least one item to your order')
+    return
+  }
+  
+  if (!deliveryLocation.value.trim()) {
+    locationError.value = 'Please add your delivery location to continue'
+    return
+  }
+  
+  locationError.value = ''
+  
+  try {
+    const delivery = await calculateDelivery(deliveryLocation.value)
+    deliveryCharge.value = delivery.deliveryCharge
+    deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
+  } catch (error) {
+    console.error('Delivery calculation failed:', error)
+    deliveryCharge.value = 40 // fallback
   }
   
   let message = '🛒 *ORDER DETAILS*\n\n'
   
+    
   // Add customer information if user is logged in
   if (user.value) {
     message += '*Customer Information:*\n'
@@ -94,6 +179,12 @@ const placeOrder = () => {
       message += `Address: ${user.value.address}\n`
     }
     message += '\n'
+  }
+  
+  // Add delivery location
+  if (deliveryLocation.value) {
+    message += '*Delivery Location:*\n'
+    message += `${deliveryLocation.value}\n\n`
   }
   
   message += '*Items:*\n'
@@ -112,18 +203,16 @@ const placeOrder = () => {
   
   message += '*Order Summary:*\n'
   message += 'Subtotal: KSH ' + subtotal.value + '\n'
-  message += 'Delivery Fee: KSH ' + deliveryFee.value + '\n'
+  message += 'VAT: KSH ' + serviceFee.value + '\n'
+  message += 'Service Charge: KSH ' + deliveryCharge.value + '\n'
   message += 'Total: KSH ' + total.value + '\n\n'
-  message += '*Payment Method:* WhatsApp Pay\n\n'
   
-  if (!user.value) {
-    message += '📍 *Delivery Information Needed*\n'
-    message += 'Please provide your delivery address and contact information.\n\n'
-  } else if (!user.value.address) {
-    message += '📍 *Delivery Address Needed*\n'
-    message += 'Please provide your delivery address.\n\n'
+  if (deliveryTimeMessage.value) {
+    message += deliveryTimeMessage.value + '\n\n'
   }
   
+  message += '*Payment Method:* M-Pesa Pay\n\n'
+  message += 'Pay to: 0703735924\n\n'
   message += 'Thank you for your order! 🎉'
   
   const whatsappUrl = `https://wa.me/254703735924?text=${encodeURIComponent(message)}`
@@ -146,8 +235,41 @@ const addMoreItems = () => {
       </div>
 
       <div class="order-content">
+        <div class="category-info" v-if="props.category">
+          <h3>{{ props.category }}</h3>
+          <p>Add specific items you need from this category below.</p>
+        </div>
+
+        <div class="add-item-section">
+          <h4>Add Items</h4>
+          <div class="item-input-group">
+            <input 
+              v-model="newItemName"
+              type="text"
+              placeholder="Enter item name (e.g., Tomatoes, Milk, Bread)"
+              class="item-input"
+              @keyup.enter="addCustomItem"
+            />
+            <input 
+              v-model.number="newItemPrice"
+              type="number"
+              placeholder="Price"
+              class="price-input"
+              @keyup.enter="addCustomItem"
+            />
+            <input 
+              v-model="newItemUnit"
+              type="text"
+              placeholder="Unit (e.g., kg, pcs, liters)"
+              class="unit-input"
+              @keyup.enter="addCustomItem"
+            />
+            <button @click="addCustomItem" class="add-item-btn">Add</button>
+          </div>
+        </div>
+
         <div v-if="orderItems.length === 0" class="empty-order">
-          <p>No items in your order</p>
+          <p>No items in your order. Add items above to get started.</p>
         </div>
 
         <div v-else class="order-items">
@@ -193,14 +315,58 @@ const addMoreItems = () => {
           ></textarea>
         </div>
 
+        <div class="delivery-location">
+          <label for="location">Delivery Location *</label>
+          <div class="location-input-group">
+            <input 
+              id="location"
+              v-model="deliveryLocation"
+              type="text"
+              placeholder="Enter your delivery address or click 'Use Current Location'"
+              class="location-input"
+              @input="locationError = ''"
+              @blur="processLocation(deliveryLocation)"
+            />
+            <span v-if="locationError" class="location-error">{{ locationError }}</span>
+            <button 
+              @click="getCurrentLocation"
+              :disabled="locationLoading"
+              class="location-btn"
+              type="button"
+            >
+              <span v-if="locationLoading" class="loading-icon">...</span>
+              <span v-else class="location-icon">Use Current Location</span>
+            </button>
+          </div>
+          <div v-if="locationLink && !locationLoading" class="location-link">
+            <button @click="viewLocationOnMap" class="map-link-btn">
+              View on Map
+            </button>
+          </div>
+          <p class="location-help">
+            You can enter your address manually or use your current location for accurate delivery.
+          </p>
+        </div>
+
+        <!-- Pricing & Delivery Disclaimer -->
+        <div class="order-disclaimer">
+          <h4>Pricing & Delivery Disclaimer:</h4>
+          <p>Prices are subject to change due to market conditions, weather patterns, and other external factors. Final receipts will be provided once your order has been picked and processed.</p>
+          <p>We currently deliver across Nairobi, including Kilimani, Westlands, Lavington, Lang'ata, and Kileleshwa, ensuring a reliable and convenient service for all your orders.</p>
+        </div>
+
         <div class="order-summary">
           <div class="price-row">
             <span>Subtotal</span>
             <span>KSH {{ subtotal.toLocaleString() }}.00</span>
           </div>
           <div class="price-row">
-            <span>Delivery Fee</span>
-            <span>KSH {{ deliveryFee.toLocaleString() }}.00</span>
+            <span>VAT</span>
+            <span>KSH {{ serviceFee.toLocaleString() }}.00</span>
+          </div>
+          <div class="price-row">
+            <span>Service Charge</span>
+            <span>KSH {{ deliveryCharge.toLocaleString() }}.00</span>
           </div>
           <div class="price-row total">
             <span>Total</span>
@@ -216,6 +382,10 @@ const addMoreItems = () => {
           <p class="payment-note">
             We accept payment through WhatsApp. You'll receive payment instructions after placing your order.
           </p>
+          <div class="service-info">
+            <span class="service-icon">🏍️</span>
+            <span>Delivery service includes professional rider handling</span>
+          </div>
         </div>
       </div>
 
@@ -223,8 +393,13 @@ const addMoreItems = () => {
         <button class="add-more-btn" @click="addMoreItems">
           + Add More Items
         </button>
-        <button class="checkout-btn" @click="placeOrder">
-          Place Your Order • KSH {{ total.toLocaleString() }}.00
+        <button 
+          class="checkout-btn" 
+          @click="placeOrder"
+          :disabled="!canPlaceOrder"
+          :class="{ 'checkout-btn--disabled': !canPlaceOrder }"
+        >
+          {{ canPlaceOrder ? `Place Your Order • KSH ${total.toLocaleString()}.00` : 'Add Delivery Location to Continue' }}
         </button>
       </div>
     </div>
@@ -245,7 +420,7 @@ const addMoreItems = () => {
 }
 
 .order-window {
-  width: 400px;
+  width: 550px;
   height: 100vh;
   background: white;
   display: flex;
@@ -415,12 +590,177 @@ const addMoreItems = () => {
   resize: vertical;
 }
 
+.order-notes textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.delivery-location {
+  margin-bottom: 1.5rem;
+}
+
+.delivery-location label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.location-input-group {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.location-input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+}
+
+.location-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.location-btn {
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.location-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.location-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.location-help {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.category-info {
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.category-info h3 {
+  margin: 0 0 0.5rem 0;
+  color: #1e40af;
+  font-size: 1.125rem;
+}
+
+.category-info p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 0.875rem;
+}
+
+.add-item-section {
+  margin-bottom: 1.5rem;
+}
+
+.add-item-section h4 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.item-input-group {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.item-input, .price-input, .unit-input {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+}
+
+.item-input:focus, .price-input:focus, .unit-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.add-item-btn {
+  padding: 0.75rem 1.5rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  height: fit-content;
+}
+
+.add-item-btn:hover {
+  background: #059669;
+}
+
 .order-summary {
   margin-bottom: 1.5rem;
   padding: 1rem;
   background: #f8fafc;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+}
+
+.order-disclaimer {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.order-disclaimer h4 {
+  margin: 0 0 0.5rem 0;
+  color: #856404;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.order-disclaimer p {
+  margin: 0.25rem 0;
+  color: #856404;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.disclaimer-icon {
+  font-size: 1.25rem;
 }
 
 .price-row {
@@ -467,6 +807,22 @@ const addMoreItems = () => {
   line-height: 1.4;
 }
 
+.service-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #f0f9ff;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #0369a1;
+}
+
+.service-icon {
+  font-size: 1.1rem;
+}
+
 .order-footer {
   padding: 1.5rem;
   border-top: 1px solid #e5e7eb;
@@ -508,5 +864,69 @@ const addMoreItems = () => {
 .checkout-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
+}
+
+.checkout-btn--disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.checkout-btn--disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.location-error {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+
+.location-link {
+  margin-top: 0.5rem;
+}
+
+.map-link-btn {
+  padding: 0.5rem 1rem;
+  background: #f3f4f6;
+  color: #059669;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.map-link-btn:hover {
+  background: #e5e7eb;
+  border-color: #059669;
+}
+
+.location-help {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+  line-height: 1.4;
+}
+
+.loading-icon {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.location-icon {
+  font-weight: 600;
 }
 </style>

@@ -17,7 +17,6 @@
             >
               <span class="category-icon">{{ category.icon }}</span>
               <span class="category-name">{{ category.name }}</span>
-              <span class="category-count">({{ category.count }})</span>
             </li>
           </ul>
         </nav>
@@ -30,40 +29,42 @@
           <div class="filters">
             <select v-model="sortBy" class="sort-select">
               <option value="name">Sort by Name</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
             </select>
           </div>
         </div>
 
-        <!-- Products Grid -->
-        <div class="products-grid">
+        
+        <!-- Category Sections -->
+        <div class="category-sections">
           <div 
-            v-for="product in filteredProducts" 
-            :key="product.id"
-            class="product-card"
-            @click="openOrderWindow(product)"
+            v-for="category in getCategorySections()" 
+            :key="category.id"
+            class="category-section"
+            v-if="selectedCategory === 'all' || selectedCategory === category.id"
           >
-            <div class="product-image">
-              <img :src="product.image" :alt="product.name" />
-              <div class="product-badge" v-if="product.badge">
-                {{ product.badge }}
-              </div>
-            </div>
-            <div class="product-info">
-              <h3 class="product-name">{{ product.name }}</h3>
-              <p class="product-description">{{ product.description }}</p>
-              <div class="product-price">
-                <span class="price">KSH {{ product.price }}</span>
-                <span class="unit">/ {{ product.unit }}</span>
-              </div>
-              <button 
-                class="add-to-cart-btn" 
-                @click.stop="openOrderWindow(product)"
+            <div class="section-images">
+              <div 
+                v-for="product in category.products" 
+                :key="product.id"
+                class="section-product-image"
+                @click="openOrderWindow(product)"
               >
-                Order Now
-              </button>
+                <img :src="product.image" :alt="product.name" />
+                <div class="image-overlay">
+                  <span class="product-name-overlay">{{ product.name }}</span>
+                </div>
+              </div>
             </div>
+          </div>
+          
+          <!-- Single Order Button -->
+          <div class="order-section">
+            <button 
+              class="main-order-btn"
+              @click="openMainOrder"
+            >
+              Order
+            </button>
           </div>
         </div>
 
@@ -93,12 +94,9 @@ interface Product {
   id: string
   name: string
   description: string
-  price: number
-  unit: string
   category: string
   image: string
   badge?: string
-  cratePrice?: number
 }
 
 interface Category {
@@ -127,32 +125,23 @@ const products: Product[] = [
     id: '1',
     name: 'Tusker Beer',
     description: 'Kenya\'s favorite beer - smooth and refreshing',
-    price: 300,
-    unit: 'bottle',
     category: 'beer',
     image: '/images/categories/drinks/tusker beer.jfif',
-    cratePrice: 2000,
     badge: 'Popular'
   },
   {
     id: '2',
     name: 'Heineken Beer',
     description: 'Premium international lager',
-    price: 300,
-    unit: 'bottle',
     category: 'beer',
-    image: '/images/categories/drinks/heineken beer.jfif',
-    cratePrice: 2500
+    image: '/images/categories/drinks/heineken beer.jfif'
   },
   {
     id: '3',
     name: 'Whitecap Beer',
     description: 'Classic Kenyan beer with rich taste',
-    price: 300,
-    unit: 'bottle',
     category: 'beer',
-    image: '/images/categories/drinks/whitecap beer.jfif',
-    cratePrice: 1900
+    image: '/images/categories/drinks/whitecap beer.jfif'
   },
   
   // Spirits Category
@@ -160,8 +149,6 @@ const products: Product[] = [
     id: '4',
     name: 'Captain Morgan Rum',
     description: 'Premium spiced Caribbean rum',
-    price: 1800,
-    unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/captain morgan.jfif',
     badge: 'Premium'
@@ -170,8 +157,6 @@ const products: Product[] = [
     id: '5',
     name: 'Smirnoff Vodka',
     description: 'Smooth premium vodka',
-    price: 1500,
-    unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/smirnoff.jfif'
   },
@@ -179,8 +164,6 @@ const products: Product[] = [
     id: '6',
     name: 'Johnnie Walker Red Label',
     description: 'Classic blended Scotch whisky',
-    price: 3200,
-    unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/red label.jfif',
     badge: 'Best Seller'
@@ -189,8 +172,6 @@ const products: Product[] = [
     id: '7',
     name: 'Chrome Gin',
     description: 'Premium London dry gin',
-    price: 1200,
-    unit: 'bottle',
     category: 'spirits',
     image: '/images/categories/drinks/chrom gin.jfif'
   },
@@ -200,8 +181,6 @@ const products: Product[] = [
     id: '8',
     name: 'Premium Wine',
     description: 'Selection of fine wines',
-    price: 1500,
-    unit: 'bottle',
     category: 'wine',
     image: '/images/categories/drinks/wine.jfif'
   },
@@ -211,8 +190,6 @@ const products: Product[] = [
     id: '9',
     name: 'Soda Collection',
     description: 'Assorted soft drinks variety pack',
-    price: 450,
-    unit: 'pack',
     category: 'soda',
     image: '/images/categories/drinks/soda.png',
     badge: 'Value Pack'
@@ -221,12 +198,45 @@ const products: Product[] = [
     id: '10',
     name: 'Mixed Drinks',
     description: 'Variety of beverages and soft drinks',
-    price: 680,
-    unit: 'pack',
     category: 'soda',
     image: '/images/categories/drinks/drinks.jfif'
   }
 ]
+
+const getCategorySections = () => {
+  const categoryMap = new Map()
+  
+  // Initialize categories
+  categories.forEach(cat => {
+    if (cat.id !== 'all') {
+      categoryMap.set(cat.id, {
+        id: cat.id,
+        name: cat.name,
+        products: []
+      })
+    }
+  })
+  
+  // Group products by category
+  products.forEach(product => {
+    const categoryProducts = categoryMap.get(product.category)
+    if (categoryProducts) {
+      categoryProducts.products.push(product)
+    }
+  })
+  
+  // Sort products within each category
+  categoryMap.forEach(category => {
+    category.products.sort((a, b) => {
+      if (sortBy.value === 'name') {
+        return a.name.localeCompare(b.name)
+      }
+      return 0
+    })
+  })
+  
+  return Array.from(categoryMap.values())
+}
 
 const filteredProducts = computed(() => {
   let filtered = selectedCategory.value === 'all' 
@@ -237,10 +247,6 @@ const filteredProducts = computed(() => {
     switch (sortBy.value) {
       case 'name':
         return a.name.localeCompare(b.name)
-      case 'price-low':
-        return a.price - b.price
-      case 'price-high':
-        return b.price - a.price
       default:
         return 0
     }
@@ -256,6 +262,18 @@ const selectCategory = (categoryId: string) => {
 const getCurrentCategoryName = () => {
   const category = categories.find(c => c.id === selectedCategory.value)
   return category ? category.name : 'All Drinks'
+}
+
+const openMainOrder = () => {
+  // Create a general order product
+  const mainOrderProduct = {
+    id: 'main-order',
+    name: 'Drinks Order',
+    description: 'Place your order for drinks',
+    category: 'all',
+    image: ''
+  }
+  openOrderWindow(mainOrderProduct)
 }
 
 const openOrderWindow = (product: Product) => {
@@ -393,6 +411,112 @@ onMounted(() => {
   background: white;
   font-size: 0.875rem;
   cursor: pointer;
+}
+
+.price-disclaimer {
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.price-disclaimer p {
+  margin: 0;
+  color: #856404;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+/* Category Sections */
+.category-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.category-section {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.order-section {
+  display: flex;
+  justify-content: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.main-order-btn {
+  padding: 1rem 3rem;
+  background: linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.main-order-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 107, 53, 0.4);
+}
+
+.section-images {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.section-product-image {
+  position: relative;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  aspect-ratio: 1;
+}
+
+.section-product-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.section-product-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.image-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+  padding: 1rem 0.5rem 0.5rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.section-product-image:hover .image-overlay {
+  opacity: 1;
+}
+
+.product-name-overlay {
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  display: block;
 }
 
 /* Products Grid */
@@ -552,12 +676,26 @@ onMounted(() => {
     border-left: none;
     border-bottom-color: #ff6b35;
   }
+  
+  .section-images {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
-  .products-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
+  .section-images {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+  
+  .order-section {
+    padding: 1.5rem;
+  }
+  
+  .main-order-btn {
+    padding: 0.75rem 2rem;
+    font-size: 1rem;
   }
   
   .content-header {

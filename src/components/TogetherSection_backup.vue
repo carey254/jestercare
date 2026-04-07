@@ -1,36 +1,35 @@
-<template>
+﻿<template>
   <section id="together" class="together" aria-labelledby="together-title">
     <div class="together__header">
-      <h2 id="together-title" class="together__heading">How JesterSpeed works</h2>
-      <p class="together__subtitle">Nairobi's fastest delivery service - get groceries, meals, and more in minutes</p>
+      <h2 id="together-title" class="together__heading">Let's do it together</h2>
+      <p class="together__subtitle">Join our growing community and be part of Nairobi's delivery revolution</p>
     </div>
     
     <div class="together__grid">
       <article 
-        v-for="(step, index) in steps" 
-        :key="step.id"
+        v-for="(opportunity, index) in opportunities" 
+        :key="opportunity.id"
         class="opportunity-card"
         :class="{ 'opportunity-card--hovered': hoveredCard === index }"
         @mouseenter="hoveredCard = index"
         @mouseleave="hoveredCard = null"
-        @click="handleCardClick(step)"
+        @click="handleCardClick(opportunity)"
         role="button"
         tabindex="0"
-        @keydown.enter="handleCardClick(step)"
-        @keydown.space.prevent="handleCardClick(step)"
+        @keydown.enter="handleCardClick(opportunity)"
+        @keydown.space.prevent="handleCardClick(opportunity)"
       >
-        <div class="step-number">{{ step.step }}</div>
         <div class="opportunity-card__icon">
-          <component :is="step.icon" class="icon" />
+          <component :is="opportunity.icon" class="icon" />
         </div>
         
         <div class="opportunity-card__content">
-          <h3 class="opportunity-card__title">{{ step.title }}</h3>
-          <p class="opportunity-card__description">{{ step.description }}</p>
+          <h3 class="opportunity-card__title">{{ opportunity.title }}</h3>
+          <p class="opportunity-card__description">{{ opportunity.description }}</p>
           
           <div class="opportunity-card__features">
             <span 
-              v-for="feature in step.features" 
+              v-for="feature in opportunity.features" 
               :key="feature"
               class="feature-tag"
             >
@@ -40,9 +39,9 @@
           
           <button 
             class="opportunity-card__cta"
-            @click.stop="handleCTAClick(step)"
+            @click.stop="handleCTAClick(opportunity)"
           >
-            {{ step.cta }}
+            {{ opportunity.cta }}
             <svg class="cta-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M5 12h14m-7-7l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -56,7 +55,7 @@
     <!-- Modal for detailed information -->
     <teleport to="body">
       <div 
-        v-if="selectedStep" 
+        v-if="selectedOpportunity" 
         class="modal-overlay"
         @click="closeModal"
         @keydown.esc="closeModal"
@@ -69,18 +68,17 @@
           </button>
           
           <div class="modal__icon">
-            <component :is="selectedStep.icon" class="icon" />
+            <component :is="selectedOpportunity.icon" class="icon" />
           </div>
           
-          <div class="modal__step">{{ selectedStep.step }}</div>
-          <h3 class="modal__title">{{ selectedStep.title }}</h3>
-          <p class="modal__description">{{ selectedStep.description }}</p>
+          <h3 class="modal__title">{{ selectedOpportunity.title }}</h3>
+          <p class="modal__description">{{ selectedOpportunity.description }}</p>
           
           <div class="modal__benefits">
-            <h4>What you can do:</h4>
+            <h4>What you'll get:</h4>
             <ul>
-              <li v-for="detail in selectedStep.details" :key="detail">
-                {{ detail }}
+              <li v-for="benefit in selectedOpportunity.benefits" :key="benefit">
+                {{ benefit }}
               </li>
             </ul>
           </div>
@@ -89,177 +87,139 @@
             class="modal__cta"
             @click="handleModalCTA"
           >
-            {{ selectedStep.cta }}
+            {{ selectedOpportunity.cta }}
           </button>
         </div>
       </div>
     </teleport>
-    
-    <!-- Order Window Modal -->
-    <OrderWindow 
-      v-if="showOrderWindow" 
-      @close="showOrderWindow = false"
-    />
   </section>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import OrderWindow from './OrderWindow.vue'
 
 // Icon components as inline SVGs
-const BrowseIcon = {
+const RiderIcon = {
   template: `
     <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
-      <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="2"/>
+      <path d="M12 13c-4 0-7 2-7 6v2h14v-2c0-4-3-6-7-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M16 3l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
 }
 
-const CartIcon = {
+const PartnerIcon = {
   template: `
     <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="9" cy="21" r="1" stroke="currentColor" stroke-width="2"/>
-      <circle cx="20" cy="21" r="1" stroke="currentColor" stroke-width="2"/>
-      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`
 }
 
-const TrackIcon = {
+const CareersIcon = {
   template: `
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" stroke-width="2"/>
-      <circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="2"/>
+      <rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+      <path d="M8 7V4a2 2 0 012-2h4a2 2 0 012 2v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <path d="M12 12v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="12" cy="11" r="1" fill="currentColor"/>
     </svg>`
 }
 
-const DeliveryIcon = {
-  template: `
-    <svg viewBox="0 0 24 24" fill="none">
-      <path d="M9 2v6m3-6v6m-9 6h18m-3 0v6a2 2 0 01-2 2H7a2 2 0 01-2-2v-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`
-}
-
-interface Step {
+interface Opportunity {
   id: number
-  step: string
   title: string
   description: string
   features: string[]
   cta: string
   icon: any
-  details: string[]
+  benefits: string[]
   action?: string
 }
 
-const steps: Step[] = [
+const opportunities: Opportunity[] = [
   {
     id: 1,
-    step: 'Step 1',
-    title: 'Choose Your Service',
-    description: 'Select from groceries, meals, pharmacy, or package delivery across Nairobi',
-    features: ['Multiple categories', 'Restaurant partners', 'Store delivery', 'Pharmacy service'],
-    cta: 'Browse services',
-    icon: BrowseIcon,
-    details: [
-      'Order fresh groceries from Carrefour, Naivas, and local markets',
-      'Get meals from your favorite Nairobi restaurants',
-      'Fast pharmacy delivery from licensed pharmacies',
-      'Package and document delivery across the city'
+    title: 'Become a rider',
+    description: 'Flexible hours, competitive earnings, and Nairobi routes that fit your day.',
+    features: ['Flexible hours', 'Competitive earnings', 'Nairobi routes'],
+    cta: 'Register interest',
+    icon: RiderIcon,
+    benefits: [
+      'Earn competitive rates on every delivery',
+      'Choose when and where you work',
+      'Join a community of 1000+ riders',
+      'Weekly payments and bonuses',
+      'Free training and support'
     ],
-    action: '#shop'
+    action: '#partner'
   },
   {
     id: 2,
-    step: 'Step 2',
-    title: 'Place Your Order',
-    description: 'Add items to cart and checkout in seconds with multiple payment options',
-    features: ['Quick checkout', 'M-Pesa payment', 'Order scheduling', 'Special requests'],
-    cta: 'Order now',
-    icon: CartIcon,
-    details: [
-      'Secure M-Pesa, card, and cash payment options',
-      'Schedule orders for later delivery times',
-      'Add special instructions for your order',
-      'Save favorite orders for quick reordering'
+    title: 'Become a partner',
+    description: 'Reach more customers with our tech and riders â€” groceries, pharmacy, and more.',
+    features: ['Reach more customers', 'Use our tech', 'Grow your business'],
+    cta: 'Partner with us',
+    icon: PartnerIcon,
+    benefits: [
+      'Access to 50,000+ active customers',
+      'Professional delivery fleet',
+      'Real-time order tracking',
+      'Analytics and insights dashboard',
+      'Marketing and promotional support'
     ],
-    action: '#shop'
+    action: '#partner'
   },
   {
     id: 3,
-    step: 'Step 3',
-    title: 'Track Your Rider',
-    description: 'Watch your JesterSpeed rider in real-time from pickup to delivery',
-    features: ['Live GPS tracking', 'Rider details', 'ETA updates', 'Direct chat'],
-    cta: 'Track order',
-    icon: TrackIcon,
-    details: [
-      'See your rider\'s photo and vehicle details',
-      'Real-time GPS tracking on Nairobi maps',
-      'Accurate delivery time estimates',
-      'Chat directly with your rider for special instructions'
+    title: 'Careers',
+    description: 'Ambitious, humble, and team-oriented? We\'d love to hear from you.',
+    features: ['Growth opportunities', 'Team culture', 'Innovation'],
+    cta: 'View openings',
+    icon: CareersIcon,
+    benefits: [
+      'Competitive salary and benefits',
+      'Remote and hybrid work options',
+      'Professional development budget',
+      'Health and wellness programs',
+      'Be part of Nairobi\'s tech revolution'
     ],
-    action: '#orders'
-  },
-  {
-    id: 4,
-    step: 'Step 4',
-    title: 'Receive Your Delivery',
-    description: 'Get your items delivered fast and safely to your Nairobi location',
-    features: ['30-min delivery', 'Contactless option', 'Quality check', 'Customer support'],
-    cta: 'Get started',
-    icon: DeliveryIcon,
-    details: [
-      'Average delivery time of 30-45 minutes',
-      'Contactless delivery for safety and convenience',
-      'Verify items before accepting your delivery',
-      '24/7 customer support for any issues'
-    ],
-    action: '#shop'
+    action: 'mailto:careers@jesterspeed.co.ke'
   }
 ]
 
 const hoveredCard = ref<number | null>(null)
-const selectedStep = ref<Step | null>(null)
-const showOrderWindow = ref(false)
+const selectedOpportunity = ref<Opportunity | null>(null)
 
-const handleCardClick = (step: Step) => {
-  if (step.id === 2) {
-    // Open order window for step 2
-    showOrderWindow.value = true
-  } else {
-    selectedStep.value = step
-  }
+const handleCardClick = (opportunity: Opportunity) => {
+  selectedOpportunity.value = opportunity
 }
 
-const handleCTAClick = (step: Step) => {
-  if (step.id === 2) {
-    // Open order window for step 2
-    showOrderWindow.value = true
-  } else if (step.action?.startsWith('mailto:')) {
-    window.location.href = step.action
-  } else if (step.action?.startsWith('#')) {
-    const element = document.querySelector(step.action)
+const handleCTAClick = (opportunity: Opportunity) => {
+  if (opportunity.action?.startsWith('mailto:')) {
+    window.location.href = opportunity.action
+  } else if (opportunity.action?.startsWith('#')) {
+    const element = document.querySelector(opportunity.action)
     element?.scrollIntoView({ behavior: 'smooth' })
   } else {
-    selectedStep.value = step
+    selectedOpportunity.value = opportunity
   }
 }
 
 const handleModalCTA = () => {
-  if (selectedStep.value) {
-    handleCTAClick(selectedStep.value)
+  if (selectedOpportunity.value) {
+    handleCTAClick(selectedOpportunity.value)
   }
   closeModal()
 }
 
 const closeModal = () => {
-  selectedStep.value = null
+  selectedOpportunity.value = null
 }
 
 // Handle escape key for modal
 const handleEscape = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && selectedStep.value) {
+  if (e.key === 'Escape' && selectedOpportunity.value) {
     closeModal()
   }
 }
@@ -309,19 +269,12 @@ onUnmounted(() => {
 .together__grid {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: repeat(4, 1fr);
-  align-items: stretch;
+  grid-template-columns: 1fr;
 }
 
-@media (max-width: 1024px) {
+@media (min-width: 768px) {
   .together__grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  .together__grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -334,9 +287,6 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
 }
 
 .opportunity-card::before {
@@ -361,25 +311,6 @@ onUnmounted(() => {
   transform: translateY(-4px);
   box-shadow: 0 20px 40px rgba(31, 31, 35, 0.12);
   border-color: var(--color-orange-soft);
-}
-
-.step-number {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  background: var(--color-orange);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius-sm);
-  transition: all 0.3s ease;
-}
-
-.opportunity-card:hover .step-number,
-.opportunity-card--hovered .step-number {
-  background: var(--color-orange-hover);
-  transform: scale(1.05);
 }
 
 .opportunity-card__icon {
@@ -415,9 +346,6 @@ onUnmounted(() => {
 .opportunity-card__content {
   position: relative;
   z-index: 2;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
 }
 
 .opportunity-card__title {
@@ -478,7 +406,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  margin-top: auto;
 }
 
 .opportunity-card__cta:hover {
@@ -601,18 +528,6 @@ onUnmounted(() => {
   color: var(--color-orange);
 }
 
-.modal__step {
-  display: inline-block;
-  background: var(--color-orange);
-  color: white;
-  font-size: 0.875rem;
-  font-weight: 700;
-  padding: 0.5rem 1rem;
-  border-radius: var(--radius-sm);
-  margin-bottom: 1rem;
-  text-align: center;
-}
-
 .modal__title {
   margin: 0 0 1rem;
   font-size: 1.5rem;
@@ -655,7 +570,7 @@ onUnmounted(() => {
 }
 
 .modal__benefits li::before {
-  content: '✓';
+  content: 'âœ“';
   position: absolute;
   left: 0;
   color: var(--color-mint);
@@ -699,3 +614,4 @@ onUnmounted(() => {
   }
 }
 </style>
+
