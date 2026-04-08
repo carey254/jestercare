@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { user, isAuthenticated } from '../composables/useAuth'
+import { cartItems, cartTotal, addToCart, removeFromCart, updateQuantity as updateCartQuantity } from '../composables/useCart'
 import {
   calculateServiceFee,
   calculateOrderTotal,
@@ -14,15 +15,6 @@ import {
   type StoreLocation
 } from '../composables/useDelivery'
 
-interface OrderItem {
-  id: string
-  name: string
-  price: number
-  unit: string
-  quantity: number
-  image?: string
-}
-
 const props = defineProps<{
   show: boolean
   category?: string
@@ -32,8 +24,6 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const orderItems = ref<OrderItem[]>([])
-const quantity = ref(1)
 const notes = ref('')
 const deliveryLocation = ref('')
 const useCurrentLocation = ref(false)
@@ -49,13 +39,9 @@ const newItemName = ref('')
 const newItemPrice = ref<number | null>(null)
 const newItemUnit = ref('')
 
-// OrderWindow opens with empty cart - user adds items manually
-
-const subtotal = computed(() => {
-  return orderItems.value.reduce((total, item) => total + (item.price * item.quantity), 0)
-})
-
-const hasItems = computed(() => orderItems.value.length > 0)
+// OrderWindow uses the global cart so items never get lost across pages.
+const subtotal = computed(() => cartTotal.value)
+const hasItems = computed(() => cartItems.value.length > 0)
 
 // VAT is 13% of items amount (subtotal)
 const vat = computed(() => calculateServiceFee(subtotal.value))
@@ -91,17 +77,11 @@ watch(
 )
 
 const updateQuantity = (itemId: string, newQuantity: number) => {
-  const item = orderItems.value.find(item => item.id === itemId)
-  if (item) {
-    item.quantity = Math.max(1, newQuantity)
-  }
+  updateCartQuantity(itemId, Math.max(1, newQuantity))
 }
 
 const removeItem = (itemId: string) => {
-  const index = orderItems.value.findIndex(item => item.id === itemId)
-  if (index > -1) {
-    orderItems.value.splice(index, 1)
-  }
+  removeFromCart(itemId)
 }
 
 const addCustomItem = () => {
@@ -115,15 +95,13 @@ const addCustomItem = () => {
     return
   }
   
-  const newItem: OrderItem = {
-    id: Date.now().toString(),
+  addToCart({
+    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     name: newItemName.value.trim(),
     price: newItemPrice.value,
     unit: newItemUnit.value.trim() || 'pcs',
-    quantity: 1
-  }
-  
-  orderItems.value.push(newItem)
+    category: props.category,
+  })
   
   // Clear inputs
   newItemName.value = ''
@@ -179,7 +157,7 @@ const getCurrentLocation = () => {
 }
 
 const placeOrder = async () => {
-  if (orderItems.value.length === 0) return
+  if (cartItems.value.length === 0) return
   
   // Require user-provided delivery location each order (live link or description)
   const locationToUse = deliveryLocation.value
@@ -192,26 +170,32 @@ const placeOrder = async () => {
     alert('Please select the store you want us to pick from before placing your order.')
     return
   }
-  if (!storeSearch.value.trim()) {
-    alert('Please search and select a store before placing your order.')
-    return
-  }
+  // storeSearch can be empty if user simply picked from the full list.
   if (!locationToUse.trim()) {
-    alert("Please share your live location using 'Use Current Location' (Google Maps link).")
-    return
-  }
-  
-  // Prefer exact pricing using pickup + live-location link (lat/lng)
-  const dropoffLatLng = parseGoogleMapsLatLng(locationToUse)
-  if (!selectedStore.value || !dropoffLatLng) {
-    alert("Live location is required. Please tap 'Use Current Location' to generate a Google Maps link.")
+    alert('Please enter your delivery location (Google Maps link OR type it manually).')
     return
   }
 
-  const pickup = { lat: selectedStore.value.lat, lng: selectedStore.value.lng }
-  const delivery = calculateDeliveryFromPickupToDropoff(pickup, dropoffLatLng)
-  deliveryCharge.value = delivery.deliveryCharge
-  deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
+  // Pricing:
+  // - If user provides a Google Maps link/lat,lng: compute accurate pickup->dropoff delivery.
+  // - Otherwise: accept manual text and fall back to text-based estimation.
+  const dropoffLatLng = parseGoogleMapsLatLng(locationToUse)
+  if (dropoffLatLng) {
+    const pickup = { lat: selectedStore.value.lat, lng: selectedStore.value.lng }
+    const delivery = calculateDeliveryFromPickupToDropoff(pickup, dropoffLatLng)
+    deliveryCharge.value = delivery.deliveryCharge
+    deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
+  } else {
+    try {
+      const delivery = await calculateDelivery(locationToUse.trim())
+      deliveryCharge.value = delivery.deliveryCharge
+      deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
+    } catch {
+      // Keep defaults if estimation fails
+      deliveryCharge.value = 40
+      deliveryTimeMessage.value = ''
+    }
+  }
   
   let message = '🛒 *ORDER DETAILS*\n\n'
   
@@ -251,8 +235,8 @@ const placeOrder = async () => {
   }
   
   message += '*Items:*\n'
-  
-  orderItems.value.forEach((item, index) => {
+
+  cartItems.value.forEach((item, index) => {
     message += (index + 1) + '. ' + item.name + '\n'
     message += '   Quantity: ' + item.quantity + ' ' + item.unit + '\n'
     message += '   Price: KSH ' + item.price + ' each\n'
@@ -326,7 +310,7 @@ const addMoreItems = () => {
           <p class="store-help" v-if="!selectedArea">Select your area above to unlock store selection.</p>
           <p class="store-help" v-else>Showing stores in <strong>{{ selectedArea }}</strong>.</p>
 
-          <div v-if="selectedArea && storeSearch.trim().length > 0" class="store-results">
+          <div v-if="selectedArea" class="store-results">
             <div v-if="storeMatches.length === 0" class="store-empty">
               No matching stores found in this area. Try a different name.
             </div>
@@ -381,12 +365,12 @@ const addMoreItems = () => {
           </div>
         </div>
 
-        <div v-if="orderItems.length === 0" class="empty-order">
+        <div v-if="cartItems.length === 0" class="empty-order">
           <p>No items in your order. Add items above to get started.</p>
         </div>
 
         <div v-else class="order-items">
-          <div v-for="item in orderItems" :key="item.id" class="order-item">
+          <div v-for="item in cartItems" :key="item.id" class="order-item">
             <div class="item-info">
               <h4>{{ item.name }}</h4>
               <p class="item-price">KSH {{ item.price.toLocaleString() }}</p>

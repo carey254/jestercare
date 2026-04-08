@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { user } from './useAuth'
 import { calculateDelivery, calculateServiceFee, calculateOrderTotal, getPriceDisclaimer, getDeliveryTimeMessage } from './useDelivery'
 
@@ -15,6 +15,46 @@ interface CartItem {
 // Global cart state
 const cartItems = ref<CartItem[]>([])
 
+const CART_STORAGE_KEY = 'jester_cart_items'
+
+function safeParseCart(raw: string | null): CartItem[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((x) => x && typeof x === 'object')
+      .map((x: any) => ({
+        id: String(x.id ?? ''),
+        name: String(x.name ?? ''),
+        price: Number(x.price ?? 0),
+        unit: String(x.unit ?? 'pcs'),
+        quantity: Math.max(1, Number(x.quantity ?? 1)),
+        image: typeof x.image === 'string' ? x.image : undefined,
+        category: typeof x.category === 'string' ? x.category : undefined,
+      }))
+      .filter((x) => x.id && x.name && Number.isFinite(x.price) && x.price >= 0 && x.quantity >= 1)
+  } catch {
+    return []
+  }
+}
+
+if (typeof window !== 'undefined') {
+  cartItems.value = safeParseCart(window.localStorage.getItem(CART_STORAGE_KEY))
+
+  watch(
+    cartItems,
+    (items) => {
+      try {
+        window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items))
+      } catch {
+        // ignore storage failures (private mode / quota)
+      }
+    },
+    { deep: true },
+  )
+}
+
 // Computed properties
 const cartCount = computed(() => {
   return cartItems.value.reduce((total, item) => total + item.quantity, 0)
@@ -30,19 +70,28 @@ const isInCart = (productId: string) => {
 
 // Cart actions
 const addToCart = (product: any) => {
-  const existingItem = cartItems.value.find(item => item.id === product.id)
+  const id = String(product?.id ?? '')
+  if (!id) return
+
+  const name = String(product?.name ?? '').trim()
+  const price = Number(product?.price ?? 0)
+  const unit = String(product?.unit ?? 'pcs').trim() || 'pcs'
+  const image = typeof product?.image === 'string' ? product.image : undefined
+  const category = typeof product?.category === 'string' ? product.category : undefined
+
+  const existingItem = cartItems.value.find(item => item.id === id)
   
   if (existingItem) {
     existingItem.quantity += 1
   } else {
     cartItems.value.push({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      unit: product.unit,
+      id,
+      name: name || 'Item',
+      price: Number.isFinite(price) && price >= 0 ? price : 0,
+      unit,
       quantity: 1,
-      image: product.image,
-      category: product.category
+      image,
+      category
     })
   }
 }

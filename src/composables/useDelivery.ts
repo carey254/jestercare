@@ -191,9 +191,27 @@ export const inferAreaFromAddress = (address: string): ServiceArea | null => {
 
 export const searchStoreLocations = (query: string, area: ServiceArea | null): StoreLocation[] => {
   const q = normalize(query)
-  if (!q) return []
-
   const inArea = area ? STORE_LOCATIONS.filter((s) => s.area === area) : STORE_LOCATIONS
+
+  // If user hasn't typed anything yet, show all available stores in the selected area.
+  if (!q) {
+    return [...inArea].sort((a, b) => a.displayName.localeCompare(b.displayName))
+  }
+
+  // Treat generic queries as "show everything in this area".
+  const generic = new Set([
+    'supermarket',
+    'super market',
+    'grocery',
+    'groceries',
+    'market',
+    'store',
+    'shop',
+  ])
+  if (generic.has(q)) {
+    return [...inArea].sort((a, b) => a.displayName.localeCompare(b.displayName))
+  }
+
   const scored = inArea
     .map((s) => {
       const hay = `${s.brand} ${s.displayName} ${s.pickupAddress} ${s.area}`.toLowerCase()
@@ -332,6 +350,11 @@ export const calculateOrderTotal = (
   serviceFee: number
 ): number => {
   return subtotal + deliveryCharge + serviceFee
+}
+
+// Standard disclaimer shown in WhatsApp order summaries.
+export const getPriceDisclaimer = (): string => {
+  return 'Prices are subject to change due to market conditions and availability. Final receipts will be provided once your order has been picked and processed.'
 }
 
 // Get delivery time estimate message

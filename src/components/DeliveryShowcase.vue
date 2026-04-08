@@ -6,7 +6,6 @@ const showOrderWindow = ref(false)
 const selectedCategory = ref('General Delivery')
 
 function openOrderModal() {
-  console.log('DeliveryShowcase Order Now clicked!')
   showOrderWindow.value = true
 }
 
@@ -40,7 +39,7 @@ function closeOrderWindow() {
     </div>
     
     <div class="delivery-showcase__cta">
-      <button @click="openOrderModal" class="delivery-showcase__btn primary">
+      <button type="button" @click.stop.prevent="openOrderModal" class="delivery-showcase__btn primary">
         Order Now
       </button>
     </div>
@@ -149,14 +148,6 @@ function closeOrderWindow() {
   background: var(--color-orange-hover);
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
-}
-
-/* Debug styles */
-.delivery-showcase__btn {
-  border: 3px solid red !important;
-  z-index: 999 !important;
-  pointer-events: auto !important;
-  position: relative !important;
 }
 
 .delivery-showcase__btn.secondary {
