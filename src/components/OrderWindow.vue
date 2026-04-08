@@ -1,7 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { user, isAuthenticated } from '../composables/useAuth'
-import { calculateServiceFee, calculateOrderTotal, calculateDelivery, getDeliveryTimeMessage, calculateOrderBreakdown, geocodeAddress, getCurrentLocationWithGeocoding } from '../composables/useDelivery'
+import {
+  calculateServiceFee,
+  calculateOrderTotal,
+  calculateDelivery,
+  getDeliveryTimeMessage,
+  SERVICE_AREAS,
+  searchStoreLocations,
+  parseGoogleMapsLatLng,
+  calculateDeliveryFromPickupToDropoff,
+  type ServiceArea,
+  type StoreLocation
+} from '../composables/useDelivery'
 
 interface OrderItem {
   id: string
@@ -28,8 +39,10 @@ const deliveryLocation = ref('')
 const useCurrentLocation = ref(false)
 const locationLoading = ref(false)
 const locationError = ref('')
-const locationData = ref(null)
-const locationLink = ref('')
+
+const selectedArea = ref<ServiceArea | ''>('')
+const storeSearch = ref('')
+const selectedStore = ref<StoreLocation | null>(null)
 
 // For custom item entry
 const newItemName = ref('')
@@ -38,13 +51,44 @@ const newItemUnit = ref('')
 
 // OrderWindow opens with empty cart - user adds items manually
 
+const subtotal = computed(() => {
+  return orderItems.value.reduce((total, item) => total + (item.price * item.quantity), 0)
+})
+
+const hasItems = computed(() => orderItems.value.length > 0)
+
+// VAT is 13% of items amount (subtotal)
+const vat = computed(() => calculateServiceFee(subtotal.value))
 const deliveryCharge = ref(40)
-const riderFee = ref(100) // Fixed rider fee (hidden from user)
-const orderBreakdown = computed(() => calculateOrderBreakdown(orderItems.value.reduce((total, item) => total + (item.price * item.quantity), 0), deliveryCharge.value))
-const subtotal = computed(() => orderBreakdown.value.subtotal)
-const serviceFee = computed(() => orderBreakdown.value.vat)
-const total = computed(() => orderBreakdown.value.total + riderFee.value)
+const riderFee = ref(100) // Fixed rider fee
+const effectiveDeliveryCharge = computed(() => (hasItems.value ? deliveryCharge.value : 0))
+const effectiveRiderFee = computed(() => (hasItems.value ? riderFee.value : 0))
+const total = computed(() =>
+  subtotal.value + vat.value + effectiveRiderFee.value + effectiveDeliveryCharge.value
+)
 const deliveryTimeMessage = ref('')
+
+const serviceChargeLabel = computed(() => effectiveRiderFee.value)
+
+const storeMatches = computed<StoreLocation[]>(() => {
+  return searchStoreLocations(storeSearch.value, selectedArea.value || null)
+})
+
+watch(
+  () => selectedArea.value,
+  () => {
+    storeSearch.value = ''
+    selectedStore.value = null
+  }
+)
+
+watch(
+  () => storeSearch.value,
+  () => {
+    // If user changes query, don't silently keep a potentially wrong selection.
+    selectedStore.value = null
+  }
+)
 
 const updateQuantity = (itemId: string, newQuantity: number) => {
   const item = orderItems.value.find(item => item.id === itemId)
@@ -87,82 +131,97 @@ const addCustomItem = () => {
   newItemUnit.value = ''
 }
 
-const processLocation = async (address: string) => {
-  if (!address.trim()) {
-    locationData.value = null
-    locationLink.value = ''
+const getCurrentLocation = () => {
+  locationError.value = ''
+  if (!selectedStore.value) {
+    alert('Select an area and pickup store first.')
+    return
+  }
+  locationLoading.value = true
+  useCurrentLocation.value = true
+
+  if (!('geolocation' in navigator)) {
+    locationError.value = 'Geolocation is not supported in this browser.'
+    locationLoading.value = false
+    return
+  }
+
+  // Browsers require a secure context (HTTPS) for geolocation, except localhost.
+  if (typeof window !== 'undefined' && 'isSecureContext' in window && !window.isSecureContext) {
+    locationError.value = 'Live location requires HTTPS. Open the site on https:// or localhost.'
+    locationLoading.value = false
     return
   }
   
-  try {
-    locationLoading.value = true
-    locationError.value = ''
-    
-    const geocoded = await geocodeAddress(address)
-    locationData.value = geocoded
-    locationLink.value = geocoded.googleMapsUrl
-    deliveryLocation.value = geocoded.formattedAddress
-  } catch (error) {
-    console.error('Location processing failed:', error)
-    locationError.value = 'Unable to process location. Please try a different address.'
-    locationData.value = null
-    locationLink.value = ''
-  } finally {
-    locationLoading.value = false
-  }
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords
+      // Store a clickable maps link (not raw coordinates text)
+      deliveryLocation.value = `https://www.google.com/maps?q=${latitude},${longitude}`
+      locationLoading.value = false
+    },
+    (error) => {
+      console.error('Geolocation error:', error)
+      deliveryLocation.value = ''
+      locationLoading.value = false
+      if (error.code === 1) {
+        locationError.value = 'Location permission was blocked. Allow location access in your browser/site settings, then try again.'
+      } else if (error.code === 2) {
+        locationError.value = 'Unable to determine your location. Please try again or paste a Google Maps link.'
+      } else if (error.code === 3) {
+        locationError.value = 'Location request timed out. Please try again.'
+      } else {
+        locationError.value = 'Unable to get your live location. Please paste a Google Maps link or describe your location.'
+      }
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+  )
 }
-
-const getCurrentLocation = async () => {
-  try {
-    locationLoading.value = true
-    locationError.value = ''
-    useCurrentLocation.value = true
-    
-    const location = await getCurrentLocationWithGeocoding()
-    locationData.value = location
-    locationLink.value = location.googleMapsUrl
-    deliveryLocation.value = location.formattedAddress
-  } catch (error) {
-    console.error('Current location failed:', error)
-    locationError.value = error.message || 'Unable to get your location. Please enter address manually.'
-  } finally {
-    locationLoading.value = false
-  }
-}
-
-const viewLocationOnMap = () => {
-  if (locationLink.value) {
-    window.open(locationLink.value, '_blank')
-  }
-}
-
-const canPlaceOrder = computed(() => {
-  return orderItems.value.length > 0 && deliveryLocation.value.trim().length > 0
-})
 
 const placeOrder = async () => {
-  if (orderItems.value.length === 0) {
-    alert('Please add at least one item to your order')
+  if (orderItems.value.length === 0) return
+  
+  // Require user-provided delivery location each order (live link or description)
+  const locationToUse = deliveryLocation.value
+
+  if (!selectedArea.value) {
+    alert('Please select your area first.')
+    return
+  }
+  if (!selectedStore.value) {
+    alert('Please select the store you want us to pick from before placing your order.')
+    return
+  }
+  if (!storeSearch.value.trim()) {
+    alert('Please search and select a store before placing your order.')
+    return
+  }
+  if (!locationToUse.trim()) {
+    alert("Please share your live location using 'Use Current Location' (Google Maps link).")
     return
   }
   
-  if (!deliveryLocation.value.trim()) {
-    locationError.value = 'Please add your delivery location to continue'
+  // Prefer exact pricing using pickup + live-location link (lat/lng)
+  const dropoffLatLng = parseGoogleMapsLatLng(locationToUse)
+  if (!selectedStore.value || !dropoffLatLng) {
+    alert("Live location is required. Please tap 'Use Current Location' to generate a Google Maps link.")
     return
   }
-  
-  locationError.value = ''
-  
-  try {
-    const delivery = await calculateDelivery(deliveryLocation.value)
-    deliveryCharge.value = delivery.deliveryCharge
-    deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
-  } catch (error) {
-    console.error('Delivery calculation failed:', error)
-    deliveryCharge.value = 40 // fallback
-  }
+
+  const pickup = { lat: selectedStore.value.lat, lng: selectedStore.value.lng }
+  const delivery = calculateDeliveryFromPickupToDropoff(pickup, dropoffLatLng)
+  deliveryCharge.value = delivery.deliveryCharge
+  deliveryTimeMessage.value = getDeliveryTimeMessage(delivery.distance)
   
   let message = '🛒 *ORDER DETAILS*\n\n'
+  
+  message += '*Service Area:*\n'
+  message += `${selectedArea.value}\n\n`
+
+  message += '*Pickup Store:*\n'
+  message += `${selectedStore.value.displayName}\n`
+  message += `Area: ${selectedStore.value.area}\n`
+  message += `Pickup location: ${selectedStore.value.pickupAddress}\n\n`
   
     
   // Add customer information if user is logged in
@@ -183,8 +242,12 @@ const placeOrder = async () => {
   
   // Add delivery location
   if (deliveryLocation.value) {
+    const isLink = /^https?:\/\/\S+$/i.test(deliveryLocation.value.trim())
+    message += isLink ? '*Delivery Location (Google Maps):*\n' : '*Delivery Location:*\n'
+    message += `${deliveryLocation.value.trim()}\n\n`
+  } else if (user.value?.address) {
     message += '*Delivery Location:*\n'
-    message += `${deliveryLocation.value}\n\n`
+    message += `${user.value.address}\n\n`
   }
   
   message += '*Items:*\n'
@@ -202,9 +265,10 @@ const placeOrder = async () => {
   }
   
   message += '*Order Summary:*\n'
-  message += 'Subtotal: KSH ' + subtotal.value + '\n'
-  message += 'VAT: KSH ' + serviceFee.value + '\n'
-  message += 'Service Charge: KSH ' + deliveryCharge.value + '\n'
+  message += 'Items Amount: KSH ' + subtotal.value + '\n'
+  message += 'VAT: KSH ' + vat.value + '\n'
+  message += 'Service Charge: KSH ' + serviceChargeLabel.value + '\n'
+  message += 'Delivery Charge: KSH ' + effectiveDeliveryCharge.value + '\n'
   message += 'Total: KSH ' + total.value + '\n\n'
   
   if (deliveryTimeMessage.value) {
@@ -238,6 +302,55 @@ const addMoreItems = () => {
         <div class="category-info" v-if="props.category">
           <h3>{{ props.category }}</h3>
           <p>Add specific items you need from this category below.</p>
+        </div>
+
+        <div class="area-select">
+          <label for="areaSelect">Your area *</label>
+          <select id="areaSelect" v-model="selectedArea" class="area-input">
+            <option value="" disabled>Select your area…</option>
+            <option v-for="a in SERVICE_AREAS" :key="a" :value="a">{{ a }}</option>
+          </select>
+          <p class="area-help">Choose your area first. We will show stores available in that area.</p>
+        </div>
+
+        <div class="store-pickup">
+          <label for="storeSearch">Pick up store *</label>
+          <input
+            id="storeSearch"
+            v-model="storeSearch"
+            type="text"
+            class="store-input"
+            placeholder="Search store (e.g., Quickmart, Naivas, Carrefour)…"
+            :disabled="!selectedArea"
+          />
+          <p class="store-help" v-if="!selectedArea">Select your area above to unlock store selection.</p>
+          <p class="store-help" v-else>Showing stores in <strong>{{ selectedArea }}</strong>.</p>
+
+          <div v-if="selectedArea && storeSearch.trim().length > 0" class="store-results">
+            <div v-if="storeMatches.length === 0" class="store-empty">
+              No matching stores found in this area. Try a different name.
+            </div>
+            <button
+              v-for="s in storeMatches"
+              :key="s.id"
+              type="button"
+              class="store-option"
+              :class="{ 'store-option--selected': selectedStore?.id === s.id }"
+              @click="selectedStore = s"
+            >
+              <div class="store-option__name">{{ s.displayName }}</div>
+              <div class="store-option__meta">
+                <span class="pill">{{ s.area }}</span>
+                <span class="muted">{{ s.pickupAddress }}</span>
+              </div>
+            </button>
+          </div>
+
+          <div v-if="selectedStore" class="store-selected">
+            <div class="store-selected__title">Selected pickup</div>
+            <div class="store-selected__line"><strong>{{ selectedStore.displayName }}</strong></div>
+            <div class="store-selected__line">{{ selectedStore.pickupAddress }}</div>
+          </div>
         </div>
 
         <div class="add-item-section">
@@ -322,30 +435,25 @@ const addMoreItems = () => {
               id="location"
               v-model="deliveryLocation"
               type="text"
-              placeholder="Enter your delivery address or click 'Use Current Location'"
+              placeholder="Paste a Google Maps link or describe your location…"
               class="location-input"
-              @input="locationError = ''"
-              @blur="processLocation(deliveryLocation)"
+              :disabled="!selectedStore"
             />
-            <span v-if="locationError" class="location-error">{{ locationError }}</span>
             <button 
               @click="getCurrentLocation"
-              :disabled="locationLoading"
+              :disabled="locationLoading || !selectedStore"
               class="location-btn"
-              type="button"
             >
-              <span v-if="locationLoading" class="loading-icon">...</span>
-              <span v-else class="location-icon">Use Current Location</span>
-            </button>
-          </div>
-          <div v-if="locationLink && !locationLoading" class="location-link">
-            <button @click="viewLocationOnMap" class="map-link-btn">
-              View on Map
+              <span v-if="locationLoading">🔄</span>
+              <span v-else>📍</span>
+              {{ locationLoading ? 'Getting...' : 'Use Current Location' }}
             </button>
           </div>
           <p class="location-help">
-            You can enter your address manually or use your current location for accurate delivery.
+            <span v-if="!selectedStore">Select an area + pickup store first, then add your live location for delivery.</span>
+            <span v-else>Use “Use Current Location” to generate a Google Maps link, or type a clear delivery description.</span>
           </p>
+          <p v-if="locationError" class="location-error">{{ locationError }}</p>
         </div>
 
         <!-- Pricing & Delivery Disclaimer -->
@@ -356,17 +464,20 @@ const addMoreItems = () => {
         </div>
 
         <div class="order-summary">
+          <div class="price-note">
+            Estimated charges are shown for transparency. Final pricing is confirmed after we pick and process your items.
+          </div>
           <div class="price-row">
-            <span>Subtotal</span>
+            <span>Items Amount</span>
             <span>KSH {{ subtotal.toLocaleString() }}.00</span>
           </div>
           <div class="price-row">
             <span>VAT</span>
-            <span>KSH {{ serviceFee.toLocaleString() }}.00</span>
+            <span>KSH {{ vat.toLocaleString() }}.00</span>
           </div>
           <div class="price-row">
             <span>Service Charge</span>
-            <span>KSH {{ deliveryCharge.toLocaleString() }}.00</span>
+            <span>KSH {{ serviceChargeLabel.toLocaleString() }}.00</span>
           </div>
           <div class="price-row total">
             <span>Total</span>
@@ -393,13 +504,8 @@ const addMoreItems = () => {
         <button class="add-more-btn" @click="addMoreItems">
           + Add More Items
         </button>
-        <button 
-          class="checkout-btn" 
-          @click="placeOrder"
-          :disabled="!canPlaceOrder"
-          :class="{ 'checkout-btn--disabled': !canPlaceOrder }"
-        >
-          {{ canPlaceOrder ? `Place Your Order • KSH ${total.toLocaleString()}.00` : 'Add Delivery Location to Continue' }}
+        <button class="checkout-btn" @click="placeOrder">
+          Place Your Order • KSH {{ total.toLocaleString() }}.00
         </button>
       </div>
     </div>
@@ -474,6 +580,159 @@ const addMoreItems = () => {
   flex: 1;
   overflow-y: auto;
   padding: 1.5rem;
+}
+
+.area-select {
+  margin-bottom: 1.25rem;
+}
+
+.area-select label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.area-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.area-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.area-help {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
+.store-pickup {
+  margin-bottom: 1.5rem;
+}
+
+.store-pickup label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.store-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+}
+
+.store-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.store-help {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
+.store-results {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.store-empty {
+  padding: 0.75rem;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.store-option {
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.store-option:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.store-option--selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.store-option__name {
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.35rem;
+}
+
+.store-option__meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.muted {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.store-selected {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 10px;
+}
+
+.store-selected__title {
+  font-weight: 800;
+  color: #166534;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+
+.store-selected__line {
+  color: #166534;
+  font-size: 0.875rem;
+  line-height: 1.35;
 }
 
 .empty-order {
@@ -660,6 +919,17 @@ const addMoreItems = () => {
   line-height: 1.4;
 }
 
+.location-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  line-height: 1.35;
+}
+
 .category-info {
   background: #f0f9ff;
   border: 1px solid #bfdbfe;
@@ -735,6 +1005,17 @@ const addMoreItems = () => {
   background: #f8fafc;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+}
+
+.price-note {
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.35;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
 }
 
 .order-disclaimer {
@@ -864,69 +1145,5 @@ const addMoreItems = () => {
 .checkout-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
-}
-
-.checkout-btn--disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-  box-shadow: none;
-  opacity: 0.6;
-}
-
-.checkout-btn--disabled:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-.location-error {
-  color: #dc2626;
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-  display: block;
-}
-
-.location-link {
-  margin-top: 0.5rem;
-}
-
-.map-link-btn {
-  padding: 0.5rem 1rem;
-  background: #f3f4f6;
-  color: #059669;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.map-link-btn:hover {
-  background: #e5e7eb;
-  border-color: #059669;
-}
-
-.location-help {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-  line-height: 1.4;
-}
-
-.loading-icon {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.location-icon {
-  font-weight: 600;
 }
 </style>

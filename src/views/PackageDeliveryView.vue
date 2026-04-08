@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { getWhatsAppUrl } from '../composables/useWhatsApp'
-import { calculatePackageDelivery, getNairobiLocations, isCalculating } from '../composables/useDelivery'
 
 const TIP_OPTIONS = [0, 50, 170, 350] as const
 const TIP_STORAGE_KEY = 'jester-package-tip-preference'
 
 const whereFrom = ref('')
 const whereTo = ref('')
-const selectedPickupZone = ref('')
-const selectedDropoffZone = ref('')
-const useZoneSelection = ref(false)
-const deliveryCalculation = ref(null)
-const calculationError = ref('')
 const sendingToSomeoneElse = ref(false)
 const recipientName = ref('')
 const recipientPhone = ref('')
@@ -39,33 +33,6 @@ onMounted(() => {
   }
 })
 
-// Calculate delivery when zones change
-watch([selectedPickupZone, selectedDropoffZone], async () => {
-  if (selectedPickupZone.value && selectedDropoffZone.value) {
-    try {
-      calculationError.value = ''
-      deliveryCalculation.value = await calculatePackageDelivery(
-        selectedPickupZone.value,
-        selectedDropoffZone.value
-      )
-    } catch (error) {
-      calculationError.value = 'Failed to calculate delivery distance'
-      console.error('Delivery calculation error:', error)
-    }
-  }
-})
-
-const availableZones = computed(() => getNairobiLocations())
-const calculatedServiceCharge = computed(() => {
-  return deliveryCalculation.value?.deliveryCharge || 0
-})
-const estimatedTime = computed(() => {
-  return deliveryCalculation.value?.deliveryTime || 0
-})
-const calculatedDistance = computed(() => {
-  return deliveryCalculation.value?.distance || 0
-})
-
 watch([tipKes, saveTipForNext], () => {
   try {
     if (!saveTipForNext.value) {
@@ -86,14 +53,10 @@ const orderSummary = computed(() => {
     '📦 *Package delivery order*',
     '',
     '*Pickup (where from):*',
-    useZoneSelection.value && selectedPickupZone.value 
-      ? availableZones.value.find(z => z.id === selectedPickupZone.value)?.name || '—'
-      : whereFrom.value.trim() || '—',
+    whereFrom.value.trim() || '—',
     '',
     '*Drop-off (where to):*',
-    useZoneSelection.value && selectedDropoffZone.value
-      ? availableZones.value.find(z => z.id === selectedDropoffZone.value)?.name || '—'
-      : whereTo.value.trim() || '—',
+    whereTo.value.trim() || '—',
     '',
     `*Sending to someone else:* ${sendingToSomeoneElse.value ? 'Yes' : 'No'}`,
   ]
@@ -106,15 +69,6 @@ const orderSummary = computed(() => {
       lines.push(`*Notes for courier:* ${recipientNotes.value.trim()}`)
     }
   }
-  if (calculatedServiceCharge.value > 0) {
-    lines.push(
-      '',
-      `*Distance:* ${calculatedDistance.value} km`,
-      `*Service Charge:* KSH ${calculatedServiceCharge.value.toLocaleString()}`,
-      `*Estimated time:* ${estimatedTime.value} minutes`
-    )
-  }
-  
   lines.push(
     '',
     `*My phone:* ${customerPhone.value.trim() || '—'}`,
@@ -134,12 +88,9 @@ const orderSummary = computed(() => {
 const whatsappHref = computed(() => getWhatsAppUrl(orderSummary.value))
 
 const canSubmit = computed(() => {
-  const hasLocations = useZoneSelection.value
-    ? selectedPickupZone.value && selectedDropoffZone.value
-    : whereFrom.value.trim().length > 0 && whereTo.value.trim().length > 0
-    
   return (
-    hasLocations &&
+    whereFrom.value.trim().length > 0 &&
+    whereTo.value.trim().length > 0 &&
     customerPhone.value.trim().length >= 9
   )
 })
@@ -166,14 +117,7 @@ const canSubmit = computed(() => {
           <p class="map-placeholder__hint">Route and pin drop will appear here when connected.</p>
         </div>
 
-        <div class="location-toggle">
-          <label class="check">
-            <input v-model="useZoneSelection" type="checkbox" class="check__input" />
-            <span class="check__text">Choose from Nairobi areas</span>
-          </label>
-        </div>
-
-        <div v-if="!useZoneSelection" class="fields">
+        <div class="fields">
           <label class="field">
             <span class="field__label">Where from?</span>
             <input
@@ -194,50 +138,6 @@ const canSubmit = computed(() => {
               autocomplete="shipping street-address"
             />
           </label>
-        </div>
-
-        <div v-else class="fields">
-          <label class="field">
-            <span class="field__label">Pickup area</span>
-            <select v-model="selectedPickupZone" class="field__input">
-              <option value="">Select pickup area</option>
-              <option v-for="zone in availableZones" :key="zone.id" :value="zone.id">
-                {{ zone.name }}
-              </option>
-            </select>
-          </label>
-          <label class="field">
-            <span class="field__label">Drop-off area</span>
-            <select v-model="selectedDropoffZone" class="field__input">
-              <option value="">Select drop-off area</option>
-              <option v-for="zone in availableZones" :key="zone.id" :value="zone.id">
-                {{ zone.name }}
-              </option>
-            </select>
-          </label>
-        </div>
-
-        <div v-if="useZoneSelection && (selectedPickupZone && selectedDropoffZone)" class="calculation-result">
-          <div v-if="isCalculating" class="loading-calc">
-            <span>Calculating distance...</span>
-          </div>
-          <div v-else-if="deliveryCalculation" class="result-details">
-            <div class="result-item">
-              <span class="result-label">Distance:</span>
-              <span class="result-value">{{ calculatedDistance }} km</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Service Charge:</span>
-              <span class="result-value">KSH {{ calculatedServiceCharge.toLocaleString() }}</span>
-            </div>
-            <div class="result-item">
-              <span class="result-label">Est. Time:</span>
-              <span class="result-value">{{ estimatedTime }} minutes</span>
-            </div>
-          </div>
-          <div v-else-if="calculationError" class="error-message">
-            {{ calculationError }}
-          </div>
         </div>
 
         <div class="recipient-block">
@@ -690,79 +590,5 @@ const canSubmit = computed(() => {
   font-size: 0.8rem;
   color: var(--color-ink-muted);
   text-align: center;
-}
-
-.location-toggle {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  background: var(--color-surface);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-}
-
-.calculation-result {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: linear-gradient(145deg, #f0fdf4, #dcfce7);
-  border-radius: var(--radius-md);
-  border: 1px solid #bbf7d0;
-}
-
-.loading-calc {
-  text-align: center;
-  color: var(--color-ink-muted);
-  font-size: 0.9rem;
-}
-
-.result-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.result-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.result-item:last-child {
-  border-bottom: none;
-}
-
-.result-label {
-  font-weight: 600;
-  color: var(--color-ink);
-  font-size: 0.9rem;
-}
-
-.result-value {
-  font-weight: 700;
-  color: #16a34a;
-  font-size: 1rem;
-}
-
-.error-message {
-  color: #dc2626;
-  font-size: 0.9rem;
-  text-align: center;
-  padding: 0.5rem;
-}
-
-.field__input:focus {
-  outline: none;
-  border-color: var(--color-orange);
-  box-shadow: 0 0 0 3px var(--color-orange-soft);
-}
-
-select.field__input {
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-  background-position: right 0.5rem center;
-  background-repeat: no-repeat;
-  background-size: 1.5em 1.5em;
-  padding-right: 2.5rem;
 }
 </style>

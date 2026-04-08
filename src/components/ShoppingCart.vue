@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { cartItems, cartTotal, removeFromCart, updateQuantity, generateWhatsAppMessage } from '../composables/useCart'
 import { isAuthenticated } from '../composables/useAuth'
-import { calculateServiceFee, calculateOrderTotal, calculateDelivery, calculateOrderBreakdown, geocodeAddress, getCurrentLocationWithGeocoding } from '../composables/useDelivery'
+import { calculateServiceFee, calculateOrderTotal, calculateDelivery } from '../composables/useDelivery'
 import { user } from '../composables/useAuth'
 
 const emit = defineEmits<{
@@ -10,11 +10,10 @@ const emit = defineEmits<{
   placeOrder: [orderDetails: any[]]
 }>()
 
+const subtotal = computed(() => cartTotal.value)
+const serviceFee = computed(() => calculateServiceFee(subtotal.value))
 const deliveryCharge = ref(40)
-const orderBreakdown = computed(() => calculateOrderBreakdown(cartTotal.value, deliveryCharge.value))
-const subtotal = computed(() => orderBreakdown.value.subtotal)
-const serviceFee = computed(() => orderBreakdown.value.vat)
-const total = computed(() => orderBreakdown.value.total)
+const total = computed(() => calculateOrderTotal(subtotal.value, deliveryCharge.value, serviceFee.value))
 const savings = computed(() => {
   // Calculate savings based on some business logic
   return cartItems.value.reduce((total, item) => {
@@ -23,86 +22,21 @@ const savings = computed(() => {
   }, 0)
 })
 
-const deliveryLocation = ref('')
-const locationError = ref('')
-const locationData = ref(null)
-const locationLoading = ref(false)
-const locationLink = ref('')
-
-const canPlaceOrder = computed(() => {
-  return cartItems.value.length > 0 && deliveryLocation.value.trim().length > 0
-})
-
-const processLocation = async (address: string) => {
-  if (!address.trim()) {
-    locationData.value = null
-    locationLink.value = ''
-    return
-  }
-  
-  try {
-    locationLoading.value = true
-    locationError.value = ''
-    
-    const geocoded = await geocodeAddress(address)
-    locationData.value = geocoded
-    locationLink.value = geocoded.googleMapsUrl
-    deliveryLocation.value = geocoded.formattedAddress
-  } catch (error) {
-    console.error('Location processing failed:', error)
-    locationError.value = 'Unable to process location. Please try a different address.'
-    locationData.value = null
-    locationLink.value = ''
-  } finally {
-    locationLoading.value = false
-  }
-}
-
-const getCurrentLocation = async () => {
-  try {
-    locationLoading.value = true
-    locationError.value = ''
-    
-    const location = await getCurrentLocationWithGeocoding()
-    locationData.value = location
-    locationLink.value = location.googleMapsUrl
-    deliveryLocation.value = location.formattedAddress
-  } catch (error) {
-    console.error('Current location failed:', error)
-    locationError.value = error.message || 'Unable to get your location. Please enter address manually.'
-  } finally {
-    locationLoading.value = false
-  }
-}
-
-const viewLocationOnMap = () => {
-  if (locationLink.value) {
-    window.open(locationLink.value, '_blank')
-  }
-}
-
 const placeOrder = async () => {
-  if (cartItems.value.length === 0) {
-    alert('Your cart is empty')
-    return
+  if (cartItems.value.length === 0) return
+  
+  // Calculate delivery if user has address
+  if (user.value?.address) {
+    try {
+      const delivery = await calculateDelivery(user.value.address)
+      deliveryCharge.value = delivery.deliveryCharge
+    } catch (error) {
+      console.error('Delivery calculation failed:', error)
+      deliveryCharge.value = 40 // fallback
+    }
   }
   
-  if (!deliveryLocation.value.trim()) {
-    locationError.value = 'Please add your delivery location to continue'
-    return
-  }
-  
-  locationError.value = ''
-  
-  try {
-    const delivery = await calculateDelivery(deliveryLocation.value)
-    deliveryCharge.value = delivery.deliveryCharge
-  } catch (error) {
-    console.error('Delivery calculation failed:', error)
-    deliveryCharge.value = 40 // fallback
-  }
-  
-  const message = await generateWhatsAppMessage(deliveryLocation.value, locationLink.value)
+  const message = await generateWhatsAppMessage()
   const whatsappUrl = `https://wa.me/254703735924?text=${encodeURIComponent(message)}`
   window.open(whatsappUrl, '_blank')
   
@@ -165,38 +99,6 @@ const continueShopping = () => {
       </div>
 
       <div v-if="cartItems.length > 0" class="cart-summary">
-        <div class="location-section">
-          <label class="field">
-            <span class="field__label">Delivery Location *</span>
-            <div class="location-input-group">
-              <input
-                v-model="deliveryLocation"
-                type="text"
-                class="field__input"
-                placeholder="Enter your delivery address..."
-                @input="locationError = ''"
-                @blur="processLocation(deliveryLocation)"
-              />
-              <button 
-                @click="getCurrentLocation"
-                :disabled="locationLoading"
-                class="location-btn"
-                type="button"
-              >
-                <span v-if="locationLoading" class="loading-icon">...</span>
-                <span v-else class="location-icon"></span>
-                {{ locationLoading ? 'Getting...' : 'Use Current Location' }}
-              </button>
-            </div>
-            <span v-if="locationError" class="field__error">{{ locationError }}</span>
-            <div v-if="locationLink && !locationLoading" class="location-link">
-              <button @click="viewLocationOnMap" class="map-link-btn">
-                View on Map
-              </button>
-            </div>
-          </label>
-        </div>
-        
         <div v-if="savings > 0" class="savings-message">
           <span class="savings-icon">✨</span>
           Nice! You've just saved KSh{{ savings.toLocaleString() }}.00
@@ -209,12 +111,12 @@ const continueShopping = () => {
             <span>KSH {{ subtotal.toLocaleString() }}.00</span>
           </div>
           <div class="price-row">
-            <span>VAT</span>
+            <span>Service Fee (13%)</span>
             <span>KSH {{ serviceFee.toLocaleString() }}.00</span>
           </div>
           <div class="price-row">
-            <span>Service Charge</span>
-            <span>KSH {{ orderBreakdown.serviceCharge.toLocaleString() }}.00</span>
+            <span>Delivery Charge</span>
+            <span>KSH {{ deliveryCharge.toLocaleString() }}.00</span>
           </div>
           <div class="price-row total">
             <span>Total</span>
@@ -239,13 +141,8 @@ const continueShopping = () => {
     </div>
 
     <div v-if="cartItems.length > 0" class="cart-footer">
-      <button 
-        class="place-order-btn" 
-        @click="placeOrder"
-        :disabled="!canPlaceOrder"
-        :class="{ 'place-order-btn--disabled': !canPlaceOrder }"
-      >
-        {{ canPlaceOrder ? `Place Your Order • KSH ${total.toLocaleString()}.00` : 'Add Delivery Location to Continue' }}
+      <button class="place-order-btn" @click="placeOrder">
+        Place Your Order • KSH {{ total.toLocaleString() }}.00
       </button>
       <button class="continue-shopping-btn" @click="continueShopping">
         Continue Shopping
@@ -561,136 +458,5 @@ const continueShopping = () => {
 .continue-shopping-btn:hover {
   background: #f9fafb;
   border-color: #d1d5db;
-}
-
-.location-section {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.field__label {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #1f2937;
-}
-
-.field__input {
-  width: 100%;
-  padding: 0.75rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  font-size: 0.95rem;
-  font-family: inherit;
-  background: white;
-  color: #1f2937;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.field__input:focus {
-  outline: none;
-  border-color: #059669;
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
-}
-
-.field__error {
-  color: #dc2626;
-  font-size: 0.8rem;
-  margin-top: 0.25rem;
-}
-
-.place-order-btn--disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-  box-shadow: none;
-  opacity: 0.6;
-}
-
-.place-order-btn--disabled:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-.location-input-group {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.location-btn {
-  padding: 0.75rem 1rem;
-  background: #059669;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.location-btn:hover:not(:disabled) {
-  background: #047857;
-}
-
-.location-btn:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.location-icon::before {
-  content: "Location";
-  font-weight: 600;
-}
-
-.loading-icon {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.location-link {
-  margin-top: 0.5rem;
-}
-
-.map-link-btn {
-  padding: 0.5rem 1rem;
-  background: #f3f4f6;
-  color: #059669;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.map-link-btn:hover {
-  background: #e5e7eb;
-  border-color: #059669;
-}
-
-.map-link-btn::before {
-  content: "View on Map";
 }
 </style>

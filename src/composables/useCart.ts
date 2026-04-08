@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { user } from './useAuth'
-import { calculateDelivery, calculateServiceFee, calculateOrderTotal, getDeliveryTimeMessage } from './useDelivery'
+import { calculateDelivery, calculateServiceFee, calculateOrderTotal, getPriceDisclaimer, getDeliveryTimeMessage } from './useDelivery'
 
 interface CartItem {
   id: string
@@ -69,13 +69,13 @@ const clearCart = () => {
   cartItems.value = []
 }
 
-const generateWhatsAppMessage = async (deliveryLocation?: string, locationLink?: string) => {
+const generateWhatsAppMessage = async () => {
   if (cartItems.value.length === 0) return ''
   
   let message = '🛒 *ORDER DETAILS*\n\n'
   
   // Add price disclaimer
-  message += 'Prices are subject to change due to market conditions. Final receipts will be provided once your order is processed.\n\n'
+  message += getPriceDisclaimer() + '\n\n'
   
   // Add customer information if user is logged in
   if (user.value) {
@@ -98,16 +98,6 @@ const generateWhatsAppMessage = async (deliveryLocation?: string, locationLink?:
       } catch (error) {
         console.error('Delivery calculation failed:', error)
       }
-    }
-    message += '\n'
-  }
-  
-  // Add delivery location if provided
-  if (deliveryLocation) {
-    message += '*Delivery Location:*\n'
-    message += `${deliveryLocation}\n`
-    if (locationLink) {
-      message += `Map: ${locationLink}\n`
     }
     message += '\n'
   }
@@ -137,23 +127,14 @@ const generateWhatsAppMessage = async (deliveryLocation?: string, locationLink?:
       console.error('Delivery calculation failed:', error)
       deliveryCharge = 40 // fallback
     }
-  } else if (deliveryLocation) {
-    try {
-      const delivery = await calculateDelivery(deliveryLocation)
-      deliveryCharge = delivery.deliveryCharge
-      deliveryTimeMessage = getDeliveryTimeMessage(delivery.distance)
-    } catch (error) {
-      console.error('Delivery calculation failed:', error)
-      deliveryCharge = 40 // fallback
-    }
   }
   
   const total = calculateOrderTotal(subtotal, deliveryCharge, serviceFee)
   
   message += '*Order Summary:*\n'
   message += `Subtotal: KSH ${subtotal}\n`
-  message += `VAT: KSH ${serviceFee}\n`
-  message += `Service Charge: KSH ${deliveryCharge}\n`
+  message += `Service Fee (13%): KSH ${serviceFee}\n`
+  message += `Delivery Charge: KSH ${deliveryCharge}\n`
   message += `Total: KSH ${total}\n\n`
   
   if (deliveryTimeMessage) {

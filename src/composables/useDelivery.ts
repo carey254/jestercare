@@ -1,5 +1,4 @@
 import { ref } from 'vue'
-import { CORE_ZONES, getCoreZoneById } from '../data/nairobiPlaces'
 
 interface DeliveryCalculation {
   distance: number
@@ -7,9 +6,32 @@ interface DeliveryCalculation {
   deliveryCharge: number
   serviceFee: number
   riderPayment: number
-  pickupLocation?: string
-  dropoffLocation?: string
 }
+
+export type ServiceArea =
+  | 'Kilimani'
+  | 'Westlands'
+  | 'Lavington'
+  | "Lang'ata"
+  | 'Kileleshwa'
+
+export interface StoreLocation {
+  id: string
+  brand: string
+  displayName: string
+  area: ServiceArea
+  pickupAddress: string
+  lat: number
+  lng: number
+}
+
+export const SERVICE_AREAS: readonly ServiceArea[] = [
+  'Kilimani',
+  'Westlands',
+  'Lavington',
+  "Lang'ata",
+  'Kileleshwa',
+] as const
 
 const deliveryCalculation = ref<DeliveryCalculation>({
   distance: 0,
@@ -20,6 +42,244 @@ const deliveryCalculation = ref<DeliveryCalculation>({
 })
 
 const isCalculating = ref(false)
+
+const STORE_LOCATIONS: StoreLocation[] = [
+  // Quickmart
+  {
+    id: 'quickmart-kilimani-yaya',
+    brand: 'Quickmart',
+    displayName: 'Quickmart - Kilimani (Yaya)',
+    area: 'Kilimani',
+    pickupAddress: 'Yaya Centre, Argwings Kodhek Rd, Kilimani, Nairobi'
+    ,
+    lat: -1.2992,
+    lng: 36.7843
+  },
+  {
+    id: 'quickmart-westlands-sarit',
+    brand: 'Quickmart',
+    displayName: 'Quickmart - Westlands (Sarit)',
+    area: 'Westlands',
+    pickupAddress: 'Sarit Centre, Karuna Rd, Westlands, Nairobi'
+    ,
+    lat: -1.2587,
+    lng: 36.8045
+  },
+  {
+    id: 'quickmart-lavington-junction',
+    brand: 'Quickmart',
+    displayName: 'Quickmart - Lavington (Junction)',
+    area: 'Lavington',
+    pickupAddress: 'The Junction Mall, Ngong Rd, Nairobi'
+    ,
+    lat: -1.2990,
+    lng: 36.7633
+  },
+  {
+    id: 'quickmart-kileleshwa',
+    brand: 'Quickmart',
+    displayName: 'Quickmart - Kileleshwa',
+    area: 'Kileleshwa',
+    pickupAddress: 'Kileleshwa, Nairobi (nearest Quickmart branch)'
+    ,
+    lat: -1.2829,
+    lng: 36.7808
+  },
+  // Naivas
+  {
+    id: 'naivas-kilimani-prestige',
+    brand: 'Naivas',
+    displayName: 'Naivas - Kilimani (Prestige)',
+    area: 'Kilimani',
+    pickupAddress: 'Prestige Plaza, Ngong Rd, Kilimani, Nairobi'
+    ,
+    lat: -1.2979,
+    lng: 36.7847
+  },
+  {
+    id: 'naivas-westlands',
+    brand: 'Naivas',
+    displayName: 'Naivas - Westlands',
+    area: 'Westlands',
+    pickupAddress: 'Westlands, Nairobi (nearest Naivas branch)'
+    ,
+    lat: -1.2647,
+    lng: 36.8035
+  },
+  {
+    id: 'naivas-lavington',
+    brand: 'Naivas',
+    displayName: 'Naivas - Lavington',
+    area: 'Lavington',
+    pickupAddress: 'Lavington, Nairobi (nearest Naivas branch)'
+    ,
+    lat: -1.2897,
+    lng: 36.7682
+  },
+  {
+    id: "naivas-langata",
+    brand: 'Naivas',
+    displayName: "Naivas - Lang'ata",
+    area: "Lang'ata",
+    pickupAddress: "Lang'ata, Nairobi (nearest Naivas branch)"
+    ,
+    lat: -1.3426,
+    lng: 36.7676
+  },
+  {
+    id: 'naivas-kileleshwa',
+    brand: 'Naivas',
+    displayName: 'Naivas - Kileleshwa',
+    area: 'Kileleshwa',
+    pickupAddress: 'Kileleshwa, Nairobi (nearest Naivas branch)'
+    ,
+    lat: -1.2829,
+    lng: 36.7808
+  },
+  // Carrefour
+  {
+    id: 'carrefour-westlands-sarit',
+    brand: 'Carrefour',
+    displayName: 'Carrefour - Westlands (Sarit)',
+    area: 'Westlands',
+    pickupAddress: 'Sarit Centre, Karuna Rd, Westlands, Nairobi'
+    ,
+    lat: -1.2587,
+    lng: 36.8045
+  },
+  {
+    id: 'carrefour-kilimani-yaya',
+    brand: 'Carrefour',
+    displayName: 'Carrefour - Kilimani (Yaya)',
+    area: 'Kilimani',
+    pickupAddress: 'Yaya Centre, Argwings Kodhek Rd, Kilimani, Nairobi'
+    ,
+    lat: -1.2992,
+    lng: 36.7843
+  },
+  {
+    id: 'greens-kileleshwa',
+    brand: 'Greens',
+    displayName: 'Greens - Kileleshwa',
+    area: 'Kileleshwa',
+    pickupAddress: 'Kileleshwa, Nairobi (nearest Greens store)'
+    ,
+    lat: -1.2829,
+    lng: 36.7808
+  }
+]
+
+const normalize = (v: string) => v.trim().toLowerCase()
+
+export const inferAreaFromAddress = (address: string): ServiceArea | null => {
+  const a = normalize(address)
+  if (!a) return null
+
+  const matchers: Array<[ServiceArea, (s: string) => boolean]> = [
+    ['Kilimani', (s) => s.includes('kilimani') || s.includes('yaya') || s.includes('argwings')],
+    ['Westlands', (s) => s.includes('westlands') || s.includes('sarit') || s.includes('karuna') || s.includes('parklands')],
+    ['Lavington', (s) => s.includes('lavington') || s.includes('junction') || s.includes('gitanga')],
+    ["Lang'ata", (s) => s.includes("lang'ata") || s.includes('langata') || s.includes('bomas') || s.includes('galleria')],
+    ['Kileleshwa', (s) => s.includes('kileleshwa') || s.includes('arboretum')],
+  ]
+
+  for (const [area, fn] of matchers) {
+    if (fn(a)) return area
+  }
+  return null
+}
+
+export const searchStoreLocations = (query: string, area: ServiceArea | null): StoreLocation[] => {
+  const q = normalize(query)
+  if (!q) return []
+
+  const inArea = area ? STORE_LOCATIONS.filter((s) => s.area === area) : STORE_LOCATIONS
+  const scored = inArea
+    .map((s) => {
+      const hay = `${s.brand} ${s.displayName} ${s.pickupAddress} ${s.area}`.toLowerCase()
+      const startsBrand = s.brand.toLowerCase().startsWith(q) ? 2 : 0
+      const startsName = s.displayName.toLowerCase().startsWith(q) ? 2 : 0
+      const includes = hay.includes(q) ? 1 : 0
+      return { s, score: startsBrand + startsName + includes }
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.s.displayName.localeCompare(b.s.displayName))
+    .map((x) => x.s)
+
+  return scored
+}
+
+export type LatLng = { lat: number; lng: number }
+
+export const parseGoogleMapsLatLng = (value: string): LatLng | null => {
+  const raw = value.trim()
+  if (!raw) return null
+
+  // Accept:
+  // - https://www.google.com/maps?q=lat,lng
+  // - https://maps.google.com/?q=lat,lng
+  // - "lat,lng"
+  const direct = raw.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/)
+  if (direct) {
+    const lat = Number(direct[1])
+    const lng = Number(direct[2])
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+  }
+
+  try {
+    const url = new URL(raw)
+    const q = url.searchParams.get('q') || url.searchParams.get('query')
+    if (q) {
+      const m = q.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/)
+      if (m) {
+        const lat = Number(m[1])
+        const lng = Number(m[2])
+        if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+      }
+    }
+  } catch {
+    // ignore non-URL inputs
+  }
+
+  return null
+}
+
+const toRad = (deg: number) => (deg * Math.PI) / 180
+
+export const getDistanceKm = (a: LatLng, b: LatLng): number => {
+  const R = 6371 // km
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const lat1 = toRad(a.lat)
+  const lat2 = toRad(b.lat)
+  const sinDLat = Math.sin(dLat / 2)
+  const sinDLng = Math.sin(dLng / 2)
+  const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng
+  const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+  return R * c
+}
+
+export const calculateDeliveryFromPickupToDropoff = (pickup: LatLng, dropoff: LatLng): DeliveryCalculation => {
+  const BASE_FEE_PER_KM = 40
+  const BASE_MIN_KM = 1
+
+  const distance = getDistanceKm(pickup, dropoff)
+  const safeDistance = Number.isFinite(distance) && distance > 0 ? distance : 0
+  const roundedUpKm = Math.max(BASE_MIN_KM, Math.ceil(safeDistance))
+
+  // Pricing rule: minimum KSh 40 for <= 1km, then +KSh 40 per extra km
+  // (This equals ceil(km) * 40, but we keep it explicit to avoid regressions.)
+  const deliveryCharge = Math.max(BASE_FEE_PER_KM, roundedUpKm * BASE_FEE_PER_KM)
+  const deliveryTime = roundedUpKm <= 1 ? 20 : roundedUpKm * 20
+
+  return {
+    distance: safeDistance,
+    deliveryTime,
+    deliveryCharge,
+    serviceFee: 0,
+    riderPayment: 100
+  }
+}
 
 // Calculate delivery based on distance in kilometers
 export const calculateDelivery = async (customerAddress: string): Promise<DeliveryCalculation> => {
@@ -50,37 +310,6 @@ export const calculateDelivery = async (customerAddress: string): Promise<Delive
   }
 }
 
-// Calculate delivery between two specific locations (for package delivery)
-export const calculatePackageDelivery = async (
-  pickupLocation: string, 
-  dropoffLocation: string
-): Promise<DeliveryCalculation> => {
-  isCalculating.value = true
-  
-  try {
-    const distance = await calculateDistanceBetweenLocations(pickupLocation, dropoffLocation)
-    const deliveryTime = distance <= 1 ? 20 : Math.ceil(distance * 15) // Faster for direct packages
-    const deliveryCharge = Math.ceil(distance * 40) // KSH 40 per kilometer
-    
-    deliveryCalculation.value = {
-      distance,
-      deliveryTime,
-      deliveryCharge,
-      serviceFee: 0,
-      riderPayment: 100,
-      pickupLocation,
-      dropoffLocation
-    }
-    
-    return deliveryCalculation.value
-  } catch (error) {
-    console.error('Error calculating package delivery:', error)
-    throw error
-  } finally {
-    isCalculating.value = false
-  }
-}
-
 // Simulate distance calculation (replace with real API call)
 const simulateDistanceCalculation = async (_address: string): Promise<number> => {
   // Simulate API delay
@@ -89,46 +318,6 @@ const simulateDistanceCalculation = async (_address: string): Promise<number> =>
   // For demo purposes, return a random distance between 0.5km and 5km
   // In production, this would use actual geocoding
   return Math.random() * 4.5 + 0.5
-}
-
-// Calculate distance between two Nairobi locations
-const calculateDistanceBetweenLocations = async (pickup: string, dropoff: string): Promise<number> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
-  // Try to get zones by ID first
-  const pickupZone = getCoreZoneById(pickup.toLowerCase())
-  const dropoffZone = getCoreZoneById(dropoff.toLowerCase())
-  
-  if (pickupZone && dropoffZone) {
-    // Calculate actual distance between zones using Haversine formula
-    return calculateHaversineDistance(
-      pickupZone.lat, pickupZone.lon,
-      dropoffZone.lat, dropoffZone.lon
-    )
-  }
-  
-  // Fallback to simulated distance for other addresses
-  const baseDistance = Math.random() * 8 + 1 // 1-9km range
-  return Math.round(baseDistance * 10) / 10 // Round to 1 decimal place
-}
-
-// Calculate distance between two coordinates using Haversine formula
-const calculateHaversineDistance = (
-  lat1: number, lon1: number, 
-  lat2: number, lon2: number
-): number => {
-  const R = 6371 // Earth's radius in kilometers
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLon = (lon2 - lon1) * Math.PI / 180
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-  const distance = R * c
-  
-  return Math.round(distance * 10) / 10 // Round to 1 decimal place
 }
 
 // Calculate service fee (13% of order total)
@@ -143,160 +332,6 @@ export const calculateOrderTotal = (
   serviceFee: number
 ): number => {
   return subtotal + deliveryCharge + serviceFee
-}
-
-// Calculate complete order breakdown
-export const calculateOrderBreakdown = (subtotal: number, deliveryCharge: number = 40) => {
-  const vat = calculateServiceFee(subtotal)
-  const serviceCharge = deliveryCharge
-  const total = calculateOrderTotal(subtotal, serviceCharge, vat)
-  
-  return {
-    subtotal,
-    vat,
-    serviceCharge,
-    total
-  }
-}
-
-// Get available Nairobi locations for package delivery
-export const getNairobiLocations = () => {
-  return CORE_ZONES.map(zone => ({
-    id: zone.id,
-    name: zone.label,
-    description: `${zone.label} area`
-  }))
-}
-
-// Calculate package delivery cost between two zones
-export const calculatePackageCost = (pickupZone: string, dropoffZone: string): number => {
-  const pickup = getCoreZoneById(pickupZone.toLowerCase())
-  const dropoff = getCoreZoneById(dropoffZone.toLowerCase())
-  
-  if (!pickup || !dropoff) {
-    return 160 // Default 4km * 40 KSH
-  }
-  
-  const distance = calculateHaversineDistance(
-    pickup.lat, pickup.lon,
-    dropoff.lat, dropoff.lon
-  )
-  
-  return Math.ceil(distance * 40)
-}
-
-// Geocode address to get coordinates and formatted address
-export const geocodeAddress = async (address: string): Promise<{
-  formattedAddress: string
-  latitude: number
-  longitude: number
-  googleMapsUrl: string
-}> => {
-  try {
-    // Check if address is a known Nairobi zone
-    const zone = getCoreZoneById(address.toLowerCase())
-    if (zone) {
-      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(zone.label + ', Nairobi, Kenya')}`
-      return {
-        formattedAddress: `${zone.label}, Nairobi, Kenya`,
-        latitude: zone.lat,
-        longitude: zone.lon,
-        googleMapsUrl
-      }
-    }
-    
-    // For other addresses, simulate geocoding (in production, use Google Maps Geocoding API)
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Generate mock coordinates for Nairobi area
-    const mockLat = -1.2921 + (Math.random() - 0.5) * 0.2
-    const mockLon = 36.8219 + (Math.random() - 0.5) * 0.2
-    
-    const formattedAddress = `${address}, Nairobi, Kenya`
-    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`
-    
-    return {
-      formattedAddress,
-      latitude: mockLat,
-      longitude: mockLon,
-      googleMapsUrl
-    }
-  } catch (error) {
-    console.error('Geocoding failed:', error)
-    throw new Error('Unable to process location')
-  }
-}
-
-// Get current user location with geocoding
-export const getCurrentLocationWithGeocoding = async (): Promise<{
-  formattedAddress: string
-  latitude: number
-  longitude: number
-  googleMapsUrl: string
-}> => {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by this browser'))
-      return
-    }
-    
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const { latitude, longitude } = position.coords
-          
-          // Reverse geocode to get address (mock implementation)
-          await new Promise(resolve => setTimeout(resolve, 800))
-          
-          // Find nearest zone or create a general address
-          let nearestZone = null
-          let minDistance = Infinity
-          
-          for (const zone of CORE_ZONES) {
-            const distance = calculateHaversineDistance(
-              latitude, longitude,
-              zone.lat, zone.lon
-            )
-            if (distance < minDistance) {
-              minDistance = distance
-              nearestZone = zone
-            }
-          }
-          
-          const formattedAddress = nearestZone 
-            ? `Near ${nearestZone.label}, Nairobi, Kenya`
-            : `Current Location, Nairobi, Kenya`
-          
-          const googleMapsUrl = `https://www.google.com/maps/@${latitude},${longitude},15z`
-          
-          resolve({
-            formattedAddress,
-            latitude,
-            longitude,
-            googleMapsUrl
-          })
-        } catch (error) {
-          reject(error)
-        }
-      },
-      (error) => {
-        reject(new Error('Unable to get your location. Please enter address manually.'))
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000 // 5 minutes
-      }
-    )
-  })
-}
-
-// Generate location sharing link
-export const generateLocationLink = (address: string, latitude?: number, longitude?: number): string => {
-  if (latitude && longitude) {
-    return `https://www.google.com/maps/@${latitude},${longitude},15z`
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ', Nairobi, Kenya')}`
 }
 
 // Get delivery time estimate message
@@ -315,10 +350,3 @@ export {
 }
 
 export type { DeliveryCalculation }
-
-export interface LocationData {
-  formattedAddress: string
-  latitude: number
-  longitude: number
-  googleMapsUrl: string
-}
